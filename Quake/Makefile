@@ -1,4 +1,4 @@
-# GNU Makefile for QuakeSpasm unix targets.
+# GNU Makefile for Ironwail unix targets.
 # You need the SDL library fully installed.
 # "make DEBUG=1" to build a debug client.
 # "make SDL_CONFIG=/path/to/sdl-config" for unusual SDL installations.
@@ -186,7 +186,7 @@ MAKEFILE := $(lastword $(MAKEFILE_LIST))
 
 .PHONY:	clean debug release
 
-DEFAULT_TARGET := quakespasm
+DEFAULT_TARGET := ironwail
 
 # ---------------------------
 # rules
@@ -296,21 +296,21 @@ OBJS += $(SYSOBJ_RES)
 # Linux build rules
 # ------------------------
 
-quakespasm:	$(OBJS) $(MAKEFILE)
+ironwail:	$(OBJS) $(MAKEFILE)
 	@echo "Linking $@" && \
 	$(LINKER) $(OBJS) $(LDFLAGS) $(LIBS) $(SDL_LIBS) -o $@ && \
 	echo "Stripping $@" && \
 	$(call do_strip,$@)
 
-release:	quakespasm
+release:	ironwail
 debug:
 	$(error Use "make DEBUG=1")
 
 clean: $(MAKEFILE)
 	rm -f $(shell find . \( -name '*~' -o -name '#*#' -o -name '*.o' -o -name '*.d' -o -name '*.res' -o -name $(DEFAULT_TARGET) \) -print)
 
-install:	quakespasm
-	cp quakespasm /usr/local/games/quake
+install:	ironwail
+	cp ironwail /usr/local/games/quake
 
 #---------------------------------------------------------------
 # include dependencies (if not running 'clean' target)
