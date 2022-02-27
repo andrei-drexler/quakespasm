@@ -1333,25 +1333,25 @@ void M_Options_Key (int k)
 
 const char *bindnames[][2] =
 {
-	{"+attack",		"attack"},
-	{"impulse 10",		"next weapon"},
-	{"impulse 12",		"prev weapon"},
-	{"+jump",		"jump / swim up"},
-	{"+forward",		"walk forward"},
-	{"+back",		"backpedal"},
-	{"+left",		"turn left"},
-	{"+right",		"turn right"},
-	{"+speed",		"run"},
-	{"+moveleft",		"step left"},
-	{"+moveright",		"step right"},
-	{"+strafe",		"sidestep"},
-	{"+lookup",		"look up"},
-	{"+lookdown",		"look down"},
-	{"centerview",		"center view"},
-	{"+mlook",		"mouse look"},
-	{"+klook",		"keyboard look"},
-	{"+moveup",		"swim up"},
-	{"+movedown",		"swim down"}
+{"+attack", 		"attack"},
+{"+jump", 			"jump"},
+{"+forward", 		"move forward"},
+{"+back", 			"move back"},
+{"+moveleft", 		"move left"},
+{"+moveright", 		"move right"},
+{"+left", 			"turn left"},
+{"+right", 			"turn right"},
+{"+moveup", 		"swim up"},
+{"+movedown", 		"swim down"},
+{"impulse 10", 		"next weapon"},
+{"impulse 12", 		"last weapon"},
+{"+speed", 			"run"},
+{"+lookup", 		"look up"},
+{"+lookdown", 		"look down"},
+{"+mlook", 			"mouse look"},
+{"+klook", 			"keyboard look"},
+{"+strafe",			"sidestep"},
+{"centerview",		"center view"}
 };
 
 #define	NUMCOMMANDS	(sizeof(bindnames)/sizeof(bindnames[0]))
