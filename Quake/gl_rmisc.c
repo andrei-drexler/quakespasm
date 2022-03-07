@@ -30,7 +30,6 @@ extern cvar_t r_flatlightstyles;
 extern cvar_t r_lerplightstyles;
 extern cvar_t gl_fullbrights;
 extern cvar_t gl_farclip;
-extern cvar_t gl_overbright;
 extern cvar_t gl_overbright_models;
 extern cvar_t r_waterwarp;
 extern cvar_t r_oldskyleaf;
@@ -50,16 +49,6 @@ extern cvar_t r_simd;
 qboolean use_simd;
 
 extern gltexture_t *playertextures[MAX_SCOREBOARD]; //johnfitz
-
-
-/*
-====================
-GL_Overbright_f -- johnfitz
-====================
-*/
-static void GL_Overbright_f (cvar_t *var)
-{
-}
 
 /*
 ====================
@@ -229,9 +218,7 @@ void R_Init (void)
 	Cvar_RegisterVariable (&r_showbboxes);
 	Cvar_RegisterVariable (&gl_farclip);
 	Cvar_RegisterVariable (&gl_fullbrights);
-	Cvar_RegisterVariable (&gl_overbright);
 	Cvar_SetCallback (&gl_fullbrights, GL_Fullbrights_f);
-	Cvar_SetCallback (&gl_overbright, GL_Overbright_f);
 	Cvar_RegisterVariable (&gl_overbright_models);
 	Cvar_RegisterVariable (&r_lerpmodels);
 	Cvar_RegisterVariable (&r_lerpmove);
