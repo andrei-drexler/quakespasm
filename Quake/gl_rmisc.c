@@ -393,7 +393,9 @@ void R_NewMap (void)
 		cl.worldmodel->leaf_efrags[i] = NULL;
 
 	r_viewleaf = NULL;
-	R_ClearParticles ();
+
+	// mh - moved to Host_ClearMemory
+	// R_ClearParticles ();
 
 	GL_BuildLightmaps ();
 	GL_BuildBModelVertexBuffer ();

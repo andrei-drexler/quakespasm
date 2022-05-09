@@ -45,6 +45,8 @@ void R_TimeRefresh_f (void);
 void R_ReadPointFile_f (void);
 texture_t *R_TextureAnimation (texture_t *base, int frame);
 
+// mh - moved to r_part.c
+#if 0
 typedef enum {
 	pt_static, pt_grav, pt_slowgrav, pt_fire, pt_explode, pt_explode2, pt_blob, pt_blob2
 } ptype_t;
@@ -62,6 +64,7 @@ typedef struct particle_s
 	float		die;
 	ptype_t		type;
 } particle_t;
+#endif
 
 
 //====================================================
@@ -120,7 +123,10 @@ extern	qboolean	gl_clipcontrol_able;
 
 //==============================================================================
 
+// mh - added DrawArraysInstanced and VertexAttribDivisor
 #define QGL_CORE_FUNCTIONS(x)\
+	x(void,			DrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei primcount))\
+	x(void,			VertexAttribDivisor, (GLuint index, GLuint divisor))\
 	x(void,			DrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount))\
 	x(void,			DrawElementsIndirect, (GLenum mode, GLenum type, const void *indirect))\
 	x(void,			MultiDrawElementsIndirect, (GLenum mode, GLenum type, const void *indirect, GLsizei drawcount, GLsizei stride))\

@@ -1131,22 +1131,39 @@ NOISE_FUNCTIONS
 //
 ////////////////////////////////////////////////////////////////
 
+// mh - new particle vertex shader
 static const char particles_vertex_shader[] =
 FRAMEDATA_BUFFER
 "\n"
-"layout(location=0) in vec4 in_pos;\n"
+"layout(location=0) in vec3 in_pos;\n"
 "layout(location=1) in vec4 in_color;\n"
 "\n"
 "layout(location=0) out vec2 out_uv;\n"
 "layout(location=1) out vec4 out_color;\n"
 "layout(location=2) out float out_fogdist;\n"
 "\n"
+"uniform vec3 r_origin;\n"
+"uniform vec3 vpn;\n"
+"uniform vec3 vup;\n"
+"uniform vec3 vright;\n"
+"uniform float texturescalefactor;\n"
+"\n"
+"vec2 corners[4] = {vec2 (-1.0, -1.0), vec2 (-1.0, 1.0), vec2 (1.0, -1.0), vec2 (1.0, 1.0)};\n"
+"\n"
 "void main()\n"
 "{\n"
-"	gl_Position = ViewProj * in_pos;\n"
+"	// figure the current corner\n"
+"	vec2 corner = corners[gl_VertexID % 4];\n"
+"\n"
+"	// hack a scale up to keep particles from disappearing\n"
+"	float scale = max (1.0 + dot (in_pos - r_origin, vpn) * 0.004, 1.08) * texturescalefactor;\n"
+"\n"
+"	// perform the billboarding\n"
+"	vec3 out_pos = in_pos + (vup * corner.x + vright * corner.y) * scale;\n"
+"\n"
+"	gl_Position = ViewProj * vec4 (out_pos, 1.0);\n"
 "	out_fogdist = gl_Position.w;\n"
-"	int vtx = gl_VertexID % 3;\n"
-"	out_uv = vec2(vtx == 1, vtx == 2);\n"
+"	out_uv = (corner + 1.0) * 0.25; // remap corner to uv range\n"
 "	out_color = in_color;\n"
 "}\n";
 

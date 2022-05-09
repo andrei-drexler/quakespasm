@@ -567,6 +567,10 @@ void Host_ClearMemory (void)
 	Sky_ClearAll();
 /* host_hunklevel MUST be set at this point */
 	Hunk_FreeToLowMark (host_hunklevel);
+
+	// mh - moved from R_NewMap
+	R_ClearParticles ();
+
 	cls.signon = 0;
 	free(sv.edicts); // ericw -- sv.edicts switched to use malloc()
 	memset (&sv, 0, sizeof(sv));
@@ -858,9 +862,13 @@ void _Host_Frame (double time)
 	if (host_speeds.value)
 		time1 = Sys_DoubleTime ();
 
+	// mh - moved before render
+	CL_RunParticles (); //johnfitz -- seperated from rendering
+
 	SCR_UpdateScreen ();
 
-	CL_RunParticles (); //johnfitz -- seperated from rendering
+	// mh - moved before render
+	// CL_RunParticles (); //johnfitz -- seperated from rendering
 
 	if (host_speeds.value)
 		time2 = Sys_DoubleTime ();
