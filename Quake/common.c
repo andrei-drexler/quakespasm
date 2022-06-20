@@ -619,6 +619,7 @@ float Q_atof (const char *str)
 	return val*sign;
 }
 
+#if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
 /*
 ============================================================================
 
@@ -689,6 +690,7 @@ float FloatNoSwap (float f)
 {
 	return f;
 }
+#endif
 
 /*
 ==============================================================================
@@ -1456,6 +1458,7 @@ COM_Init
 */
 void COM_Init (void)
 {
+#if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
 	int	i = 0x12345678;
 		/*    U N I X */
 
@@ -1494,7 +1497,7 @@ void COM_Init (void)
 		BigFloat = FloatSwap;
 		LittleFloat = FloatNoSwap;
 	}
-
+#endif
 	if (COM_CheckParm("-fitz"))
 		fitzmode = true;
 }

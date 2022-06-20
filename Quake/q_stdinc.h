@@ -69,6 +69,12 @@
 #include <stdarg.h>
 #include <string.h>
 #include <float.h>
+#if defined __has_include
+#if __has_include(<endian.h>)
+#include <endian.h>
+#endif
+#endif
+
 
 /*==========================================================================*/
 
@@ -245,6 +251,46 @@ typedef ptrdiff_t	ssize_t;
 
 /*==========================================================================*/
 
+/* endianness */
+
+#if !defined(__LITTLE_ENDIAN__) && !defined(__BIG_ENDIAN__)
+#if (defined(__BYTE_ORDER__)  && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) || \
+    (defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN) || \
+    (defined(_BYTE_ORDER) && _BYTE_ORDER == _BIG_ENDIAN) || \
+    (defined(BYTE_ORDER) && BYTE_ORDER == BIG_ENDIAN) || \
+     defined(__ARMEB__) || defined(__THUMBEB__) || defined(__AARCH64EB__)
+#define __BIG_ENDIAN__
+#elif (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || \
+      (defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN) || \
+      (defined(_BYTE_ORDER) && _BYTE_ORDER == _LITTLE_ENDIAN) || \
+      (defined(BYTE_ORDER) && BYTE_ORDER == LITTLE_ENDIAN) || \
+       defined(__ARMEL__) || defined(__THUMBEL__) || defined(__AARCH64EL__) || \
+       defined(_M_IX86) || defined(_M_X64) || \
+       defined(_M_ARM) || defined(_M_ARM64)
+#define __LITTLE_ENDIAN__
+#endif
+#endif
+
+#if defined(__BIG_ENDIAN__) && defined(__LITTLE_ENDIAN__)
+#error "__BIG_ENDIAN__ and __LITTLE_ENDIAN__ can't be defined together."
+#elif defined(__BIG_ENDIAN__) || defined(__LITTLE_ENDIAN__)
+#if defined(_MSC_VER)
+#define bswap16(x) _byteswap_ushort((x))
+#define bswap32(x) _byteswap_ulong((x))
+#elif (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)
+#define bswap16(x) __builtin_bswap16((x))
+#define bswap32(x) __builtin_bswap32((x))
+#elif defined(__has_builtin) && __has_builtin(__builtin_bswap32)
+#define bswap16(x) __builtin_bswap16((x))
+#define bswap32(x) __builtin_bswap32((x))
+#else
+#warning "No built-in byte swapping support. Endianness will be determined at run-time."
+#undef __BIG_ENDIAN__
+#undef __LITTLE_ENDIAN__
+#endif
+#endif
+
+/*==========================================================================*/
 
 #endif	/* __QSTDINC_H */
 
