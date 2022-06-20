@@ -197,7 +197,7 @@ static inline short BigShort (short s)
 
 static inline short LittleShort (short s)
 {
-#if defined(__LITTLE_ENDIAN__)
+#if defined(__BIG_ENDIAN__)
 	s = bswap16(s);
 #endif
 	return s;
@@ -213,7 +213,7 @@ static inline int BigLong (int l)
 
 static inline int LittleLong (int l)
 {
-#if defined(__LITTLE_ENDIAN__)
+#if defined(__BIG_ENDIAN__)
 	l = bswap32(l);
 #endif
 	return l;
@@ -234,7 +234,7 @@ static inline float BigFloat (float f)
 
 static inline float LittleFloat (float f)
 {
-#if defined(__LITTLE_ENDIAN__)
+#if defined(__BIG_ENDIAN__)
 	union {
 		float			f;
 		unsigned long	l;
