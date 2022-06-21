@@ -171,80 +171,18 @@ void Vec_Free (void **pvec);
 
 //============================================================================
 
-#if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
-extern	qboolean		host_bigendian;
-
-extern	short	(*BigShort) (short l);
-extern	short	(*LittleShort) (short l);
-extern	int	(*BigLong) (int l);
-extern	int	(*LittleLong) (int l);
-extern	float	(*BigFloat) (float l);
-extern	float	(*LittleFloat) (float l);
-#else
-#if defined(__BIG_ENDIAN__)
+#if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
 #define host_bigendian 1
 #else
 #define host_bigendian 0
 #endif
 
-static inline short BigShort (short s)
-{
-#if defined(__LITTLE_ENDIAN__)
-	s = bswap16(s);
-#endif
-	return s;
-}
-
-static inline short LittleShort (short s)
-{
-#if defined(__BIG_ENDIAN__)
-	s = bswap16(s);
-#endif
-	return s;
-}
-
-static inline int BigLong (int l)
-{
-#if defined(__LITTLE_ENDIAN__)
-	l = bswap32(l);
-#endif
-	return l;
-}
-
-static inline int LittleLong (int l)
-{
-#if defined(__BIG_ENDIAN__)
-	l = bswap32(l);
-#endif
-	return l;
-}
-
-static inline float BigFloat (float f)
-{
-#if defined(__LITTLE_ENDIAN__)
-	union {
-		float			f;
-		unsigned long	l;
-	} u = { f };
-	u.l = bswap32(u.l);
-	f = u.f;
-#endif
-	return f;
-}
-
-static inline float LittleFloat (float f)
-{
-#if defined(__BIG_ENDIAN__)
-	union {
-		float			f;
-		unsigned long	l;
-	} u = { f };
-	u.l = bswap32(u.l);
-	f = u.f;
-#endif
-	return f;
-}
-#endif
+#define BigShort(s)    SDL_SwapBE16((s))
+#define LittleShort(s) SDL_SwapLE16((s))
+#define BigLong(l)     SDL_SwapBE32((l))
+#define LittleLong(l)  SDL_SwapLE32((l))
+#define BigFloat(f)    SDL_SwapFloatBE((f))
+#define LittleFloat(f) SDL_SwapFloatLE((f))
 
 //============================================================================
 
