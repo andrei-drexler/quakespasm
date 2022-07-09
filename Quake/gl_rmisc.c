@@ -790,6 +790,9 @@ void GL_DynamicBuffersEndFrame (void)
 	SDL_assert (!buf->fence);
 	buf->fence = GL_FenceSyncFunc (GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
+	if (!buf->fence)
+		Sys_Error ("glFenceSync failed (error code 0x%04X)", glGetError ());
+
 	dev_stats.gpu_upload = dynabuf_offset;
 	dev_peakstats.gpu_upload = q_max (dev_peakstats.gpu_upload, dev_stats.gpu_upload);
 
