@@ -760,11 +760,10 @@ void GL_DynamicBuffersBeginFrame (void)
 
 	if (buf->fence)
 	{
-		GLuint64 timeout = 1ull * 1000 * 1000 * 1000; // 1 second
-		GLenum result = GL_ClientWaitSyncFunc (buf->fence, GL_SYNC_FLUSH_COMMANDS_BIT, timeout);
-		if (result == GL_TIMEOUT_EXPIRED)
-			glFinish ();
-		else if (result == GL_WAIT_FAILED)
+		GLenum result;
+		while ((result = GL_ClientWaitSyncFunc (buf->fence, GL_SYNC_FLUSH_COMMANDS_BIT, 0)) == GL_TIMEOUT_EXPIRED)
+			continue;
+		if (result == GL_WAIT_FAILED)
 			Sys_Error ("GL_DynamicBuffersBeginFrame: wait failed (0x%04X)", glGetError ());
 		else if (result != GL_CONDITION_SATISFIED && result != GL_ALREADY_SIGNALED)
 			Sys_Error ("GL_DynamicBuffersBeginFrame: sync failed (0x%04X)", result);
