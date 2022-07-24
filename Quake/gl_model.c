@@ -43,7 +43,7 @@ static int	mod_novis_capacity;
 static byte	*mod_decompressed;
 static int	mod_decompressed_capacity;
 
-#define	MAX_MOD_KNOWN	2048 /*johnfitz -- was 512 */
+#define	MAX_MOD_KNOWN	8192 /*Qmaster -- was 2048.  johnfitz -- was 512 */
 qmodel_t	mod_known[MAX_MOD_KNOWN];
 int		mod_numknown;
 
@@ -337,7 +337,9 @@ qmodel_t *Mod_LoadModel (qmodel_t *mod, qboolean crash)
 	if (!buf)
 	{
 		if (crash)
-			Host_Error ("Mod_LoadModel: %s not found", mod->name); //johnfitz -- was "Mod_NumForName"
+		{
+			Con_Warning("Mod_LoadModel: %s not found.\n", mod->name); // Qmaster -- was Host_Error.  johnfitz -- was "Mod_NumForName"
+		}
 		return NULL;
 	}
 
@@ -2438,8 +2440,10 @@ void * Mod_LoadAliasFrame (void * pin, maliasframedesc_t *frame)
 	int				i;
 	daliasframe_t	*pdaliasframe;
 
-	if (posenum >= MAXALIASFRAMES)
-		Sys_Error ("posenum >= MAXALIASFRAMES");
+	if (posenum >= MAXALIASFRAMES) {
+		posenum = MAXALIASFRAMES; // Qmaster -- was Sys_Error, now clamps to max.
+								  // Warning on model load rather than spam here.
+	}
 
 	pdaliasframe = (daliasframe_t *)pin;
 
@@ -2503,7 +2507,10 @@ void *Mod_LoadAliasGroup (void * pin,  maliasframedesc_t *frame)
 
 	for (i=0 ; i<numframes ; i++)
 	{
-		if (posenum >= MAXALIASFRAMES) Sys_Error ("posenum >= MAXALIASFRAMES");
+		if (posenum >= MAXALIASFRAMES) {
+			posenum = MAXALIASFRAMES; // Qmaster -- was Sys_Error, now clamps to max.
+									  // Warning on model load rather than spam here.
+		}
 
 		poseverts[posenum] = (trivertx_t *)((daliasframe_t *)ptemp + 1);
 		posenum++;
@@ -2902,6 +2909,14 @@ void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	if (numframes < 1)
 		Sys_Error ("Mod_LoadAliasModel: Invalid # of frames: %d", numframes);
 
+	if (numframes > 256) // Qmaster -- Added warning for exceeding standard limits.
+	{
+		Con_DWarning("Model %s frame count exceeds standard limit of 256", mod->name);
+	}
+	if (numframes > MAXALIASFRAMES) // Qmaster -- Added warning on load for exceeding new limit rather than error out.
+	{
+		Con_DWarning("Model %s frame count exceeds limit of %i, frame calls greater than this will be capped at max", mod->name,MAXALIASFRAMES);
+	}
 	pheader->size = LittleFloat (pinmodel->size) * ALIAS_BASE_SIZE_RATIO;
 	mod->synctype = (synctype_t) LittleLong (pinmodel->synctype);
 	mod->numframes = pheader->numframes;

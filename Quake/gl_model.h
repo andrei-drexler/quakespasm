@@ -328,7 +328,7 @@ typedef struct mtriangle_s {
 } mtriangle_t;
 
 
-#define	MAX_SKINS	32
+#define	MAX_SKINS	256 // Qmaster -- was 32
 typedef struct {
 	int			ident;
 	int			version;
