@@ -4,3 +4,6 @@ Quake/*.o
 Quake/*.d
 Quake/*.res
 Quake/*.exe
+
+# shader stuff
+Quake/shaders/shaders.c
