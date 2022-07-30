@@ -1,0 +1,10 @@
+layout(local_size_x=64) in;
+
+#include "world_draw_buffer.glsl"
+
+void main()
+{
+	uint thread_id = gl_GlobalInvocationID.x;
+	if (thread_id < cmds.length())
+		cmds[thread_id].count = 0u;
+}

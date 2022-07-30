@@ -1,0 +1,127 @@
+layout(local_size_x=64) in;
+
+#include "draw_elements_indirect_command.glsl"
+
+// Note: some old Intel drivers error out on shaders
+// that perform atomic operations on SSBO struct members.
+// As a work-around, we use uints and manual indexing.
+layout(std430, binding=1) buffer DrawIndirectBuffer
+{
+	//DrawElementsIndirectCommand cmds[];
+	uint rawcmds[];
+};
+
+@define CMD_COUNT(base)			rawcmds[base]
+@define CMD_INSTANCE_COUNT(base)	rawcmds[base + 1]
+@define CMD_FIRST_INDEX(base)		rawcmds[base + 2]
+@define CMD_BASE_VERTEX(base)		rawcmds[base + 3]
+@define CMD_BASE_INSTANCE(base)	rawcmds[base + 4]
+@define SIZEOF_CMD					5 /* uints */
+
+layout(std430, binding=2) restrict writeonly buffer IndexBuffer
+{
+	uint indices[];
+};
+
+layout(std430, binding=3) restrict readonly buffer VisBuffer
+{
+	uint vis[];
+};
+
+struct Leaf
+{
+	vec3	mins;
+	uint	firstsurf;
+	vec3	maxs;
+	uint	surfcountsky; // bit 0=sky; bits 1..31=surfcount
+};
+
+layout(std430, binding=4) restrict readonly buffer LeafBuffer
+{
+	Leaf leaves[];
+};
+
+layout(std430, binding=5) restrict readonly buffer MarkSurfBuffer
+{
+	int marksurf[];
+};
+
+struct Surface
+{
+	vec4	plane;
+	uint	framecount;
+	uint	texnum;
+	uint	numedges;
+	uint	firstvert;
+};
+
+// Same issue as above
+layout(std430, binding=6) restrict buffer SurfaceBuffer
+{
+	//Surface surfaces[];
+	uvec4 rawsurfaces[];
+};
+
+@define SURF_PLANE(base)			uintBitsToFloat(rawsurfaces[base])
+@define SURF_FRAMECOUNT(base)		rawsurfaces[base + 1].x
+@define SURF_TEXNUM(base)			rawsurfaces[base + 1].y
+@define SURF_NUMEDGES(base)		rawsurfaces[base + 1].z
+@define SURF_FIRSTVERT(base)		rawsurfaces[base + 1].w
+@define SIZEOF_SURFACE				2 /* uvec4s */
+
+layout(std140, binding=1) uniform FrameCullUBO
+{
+	vec4	frustum[4];
+	vec3	vieworg;
+	uint	oldskyleaf;
+	uint	framecount;
+};
+
+void main()
+{
+	uint thread_id = gl_GlobalInvocationID.x;
+	if (thread_id >= leaves.length())
+		return;
+	uint visible = vis[thread_id >> 5u] & (1u << (thread_id & 31u));
+	if (visible == 0u)
+		return;
+
+	Leaf leaf = leaves[thread_id];
+	uint i, j;
+	for (i = 0u; i < 4u; i++)
+	{
+		vec4 plane = frustum[i];
+		vec3 v;
+		v.x = plane.x < 0.f ? leaf.mins.x : leaf.maxs.x;
+		v.y = plane.y < 0.f ? leaf.mins.y : leaf.maxs.y;
+		v.z = plane.z < 0.f ? leaf.mins.z : leaf.maxs.z;
+		if (dot(plane.xyz, v) < plane.w)
+			return;
+	}
+
+	if ((leaf.surfcountsky & 1u) > oldskyleaf)
+		return;
+	uint surfcount = leaf.surfcountsky >> 1u;
+	vec3 campos = vieworg;
+	for (i = 0u; i < surfcount; i++)
+	{
+		uint surfindex = uint(marksurf[leaf.firstsurf + i]);
+		uint surfbase = surfindex * uint(SIZEOF_SURFACE);
+		vec4 surfplane = SURF_PLANE(surfbase);
+		if (dot(surfplane.xyz, campos) < surfplane.w)
+			continue;
+		if (atomicExchange(SURF_FRAMECOUNT(surfbase), framecount) == framecount)
+			continue;
+		uint texnum = SURF_TEXNUM(surfbase);
+		uint numedges = SURF_NUMEDGES(surfbase);
+		uint firstvert = SURF_FIRSTVERT(surfbase);
+		uint cmdbase = texnum * uint(SIZEOF_CMD);
+		uint ofs = CMD_FIRST_INDEX(cmdbase) + atomicAdd(CMD_COUNT(cmdbase), 3u * (numedges - 2u));
+		for (j = 2u; j < numedges; j++)
+		{
+			indices[ofs++] = firstvert;
+			indices[ofs++] = firstvert + j - 1u;
+			indices[ofs++] = firstvert + j;
+		}
+	}
+}

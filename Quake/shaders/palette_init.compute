@@ -1,0 +1,61 @@
+layout(local_size_x=128) in;
+
+layout(location=0) uniform int Offset;
+
+#include "palette_buffer.glsl"
+
+layout(r8ui, binding=0) uniform writeonly uimage3D PaletteLUT;
+
+vec3 sRGBToLinear(vec3 v)
+{
+	return mix(v / 12.92, pow((v + 0.055) / 1.055, vec3(2.4)), greaterThan(v, vec3(0.04045)));
+}
+
+vec3 NormalizeColor(uvec3 clr8)
+{
+	vec3 clr = vec3(clr8) * (1./255.);
+	clr = sRGBToLinear(clr);
+	return clr;
+}
+
+float ColorDistanceSquared(vec3 c0, vec3 c1)
+{
+	// Colour metric - Thiadmer Riemersma
+	// https://www.compuphase.com/cmetric.htm 
+	float rmean = (c0.r + c1.r) * 0.5;
+	vec3 delta = c0 - c1;
+	return dot(delta * delta, vec3(2. + rmean, 4., 3. - rmean));
+}
+
+shared vec3 palcolors[256];
+
+void main()
+{
+	uint groupsize = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;
+	uint numpasses = (256 + (groupsize - 1u)) / groupsize;
+	uint i, ofs;
+	for (i = 0u, ofs = 0u; i < numpasses; i++, ofs += groupsize)
+	{
+		uint idx = gl_LocalInvocationIndex + ofs;
+		if (idx < 256u)
+			palcolors[idx] = NormalizeColor(UnpackRGB8(Palette[idx]));
+	}
+	memoryBarrierShared();
+	barrier();
+
+	uvec3 gid = gl_GlobalInvocationID + UnpackRGB8(uint(Offset));
+	vec3 target = NormalizeColor((gid << 1) + (gid >> 6));
+	uint bestidx = 0;
+	float bestdist = 1e+32;
+	for (i = 0u; i < 256u; i++)
+	{
+		vec3 candidate = palcolors[i];
+		float dist = ColorDistanceSquared(target, candidate);
+		if (dist < bestdist)
+		{
+			bestidx = i;
+			bestdist = dist;
+		}
+	}
+	imageStore(PaletteLUT, ivec3(gid), uvec4(bestidx, 0, 0, 0));
+}

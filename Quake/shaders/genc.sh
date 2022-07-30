@@ -1,8 +1,9 @@
 #!/bin/sh
 
+set -e
+
 OUT=shaders.c
 HEADER=shaders.h
-VERSIOND="#version 430"
 ppflags="-E -P -x c"
 cpp=cc
 
@@ -20,7 +21,8 @@ while [ "$1" != "" ] ; do
         shaderfile=`basename "$shaderpath"`
         shadername=`echo "glsl_$shaderfile" | sed 's/[ -.]/_/g'`
 
-        ( echo "$VERSION" && $cpp $ppflags $shaderpath && head -c 1 /dev/zero )\
+        ( $cpp $ppflags $shaderpath && head -c 1 /dev/zero )\
+            | sed 's/^.*@/#/'\
             | xxd -i /dev/stdin\
             | sed s/_dev_stdin/$shadername/\
             >>"$OUT"
