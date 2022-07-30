@@ -1,12 +1,30 @@
 #!/bin/sh
 
-SHADERPATH=$1
-SHADERFILE=`basename "$SHADERPATH"`
-SHADERNAME=`echo "glsl_$SHADERFILE" | sed 's/[ -.]/_/g'`
-SHADER_C=`dirname "$SHADERPATH"`/"$SHADERFILE.c"
+OUT=shaders.c
+HEADER=shaders.h
+ppflags="-E -P -x c"
+cpp=cc
 
-head -c 1 /dev/zero\
-    | cat "$SHADERPATH" /dev/stdin\
-    | xxd -i /dev/stdin\
-    | sed -e s/_dev_stdin/$SHADERNAME/ -e '1i #include "shaders.h"'\
-    >"$SHADER_C"
+echo "#include \"$HEADER\"" >"$OUT"
+
+while [ "$1" != "" ] ; do
+    if [ "$1" == "-f" ] ; then
+        shift
+        ppflags="$ppflags $1"
+    elif [ "$1" == "-c" ] ; then
+        shift
+        cc="$1"
+    else
+        shaderpath=$1
+        shaderfile=`basename "$shaderpath"`
+        shadername=`echo "glsl_$shaderfile" | sed 's/[ -.]/_/g'`
+
+        ( $cpp $ppflags $shaderpath && head -c 1 /dev/zero )\
+            | xxd -i /dev/stdin\
+            | sed s/_dev_stdin/$shadername/\
+            >>"$OUT"
+    fi
+
+    shift
+done
+
