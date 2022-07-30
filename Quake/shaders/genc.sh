@@ -24,7 +24,7 @@ while [ "$1" != "" ] ; do
         ( $cpp $ppflags $shaderpath && head -c 1 /dev/zero )\
             | sed 's/^.*@/#/'\
             | xxd -i /dev/stdin\
-            | sed s/_dev_stdin/$shadername/\
+            | sed -e s/_dev_stdin/$shadername/ -e 's/unsigned char/char/'\
             >>"$OUT"
     fi
 
