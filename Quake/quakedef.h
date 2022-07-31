@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef QUAKEDEFS_H
 #define QUAKEDEFS_H
 
+#include "shared_defs.h"
+
 // quakedef.h -- primary header for client
 
 #define	QUAKE_GAME		// as opposed to utilities
@@ -108,7 +110,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	MIN_EDICTS	256		// johnfitz -- lowest allowed value for max_edicts cvar
 #define	MAX_EDICTS	32000		// johnfitz -- highest allowed value for max_edicts cvar
 						// ents past 8192 can't play sounds in the standard protocol
-#define	MAX_LIGHTSTYLES	64
+// Moved to shared_defs.h -4LT
+//#define	MAX_LIGHTSTYLES	64
 #define	MAX_MODELS	2048		// johnfitz -- was 256
 #define	MAX_SOUNDS	2048		// johnfitz -- was 256
 

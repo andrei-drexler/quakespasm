@@ -374,9 +374,10 @@ extern float r_matviewproj[16];
 
 void R_NewGame (void);
 
-#define LIGHT_TILES_X			32
-#define LIGHT_TILES_Y			16
-#define LIGHT_TILES_Z			32
+// Moved to shared_defs.h -4LT
+//#define LIGHT_TILES_X			32
+//#define LIGHT_TILES_Y			16
+//#define LIGHT_TILES_Z			32
 
 typedef struct gpulight_s {
 	float	pos[3];
@@ -471,13 +472,14 @@ void GLMesh_DeleteVertexBuffers (void);
 
 int R_LightPoint (vec3_t p, lightcache_t *cache);
 
-#define WORLDSHADER_SOLID		0
-#define WORLDSHADER_ALPHATEST	1
-#define WORLDSHADER_WATER		2
+// Moved to shared_defs.h -4LT
+//#define WORLDSHADER_SOLID		0
+//#define WORLDSHADER_ALPHATEST	1
+//#define WORLDSHADER_WATER		2
 
-#define ALIASSHADER_STANDARD	0
-#define ALIASSHADER_DITHER		1
-#define ALIASSHADER_NOPERSP		2
+//#define ALIASSHADER_STANDARD	0
+//#define ALIASSHADER_DITHER		1
+//#define ALIASSHADER_NOPERSP		2
 
 typedef struct glprogs_s {
 	/* 2d */

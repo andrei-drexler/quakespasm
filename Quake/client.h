@@ -63,7 +63,8 @@ typedef struct
 
 #define	SIGNONS		4			// signon messages to receive before connected
 
-#define	MAX_DLIGHTS		64 //johnfitz -- was 32
+// Moved to shared_defs.h -4LT
+//#define	MAX_DLIGHTS		64 //johnfitz -- was 32
 typedef struct
 {
 	vec3_t	origin;

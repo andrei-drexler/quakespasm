@@ -1,3 +1,5 @@
+#define MAX_LIGHTS MAX_DLIGHTS
+
 struct Light
 {
 	vec3	origin;
