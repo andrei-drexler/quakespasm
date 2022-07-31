@@ -7,3 +7,5 @@ Quake/*.exe
 
 # shader stuff
 Quake/shaders/shaders.c
+Quake/shaders/*.o
+Quake/shaders/*.d
