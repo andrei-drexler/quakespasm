@@ -2,8 +2,10 @@
 
 set -e
 
-OUT=shaders.c
+SCRIPTDIR=`dirname "$0"`
+OUT="$SCRIPTDIR/shaders.c"
 HEADER=shaders.h
+
 ppflags="-E -P -x c"
 cpp=cc
 
@@ -15,7 +17,7 @@ while [ "$1" != "" ] ; do
         ppflags="$ppflags $1"
     elif [ "$1" == "-c" ] ; then
         shift
-        cc="$1"
+        cpp="$1"
     else
         shaderpath=$1
         shaderfile=`basename "$shaderpath"`
