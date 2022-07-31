@@ -1,25 +1,6 @@
 #ifndef SHADERS_H_
 #define SHADERS_H_
 
-#include "../quakedef.h"
-
-/*
- * ideally we'd just cherry pick the following defines:
-
-#define LIGHT_TILES_X
-#define LIGHT_TILES_Y 
-#define LIGHT_TILES_Z
-#define MAX_LIGHTS
-#define MAX_LIGHTSTYLES
-#define WORLDSHADER_ALPHATEST
-#define WORLDSHADER_WATER
-#define ALIASSHADER_NOPERSP
-*/
-
-// safety first!
-
-#define SHOW_ACTIVE_LIGHT_CLUSTERS 0
-
 extern char glsl_gui_vert[];
 extern char glsl_gui_frag[];
 
