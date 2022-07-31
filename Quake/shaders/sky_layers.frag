@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 @if BINDLESS
 	@extension GL_ARB_bindless_texture : require
 @else

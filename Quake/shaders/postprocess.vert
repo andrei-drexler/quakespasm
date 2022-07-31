@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 void main()
 {
 	ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);

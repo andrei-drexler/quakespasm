@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 #include "framedata_buffer.glsl"
 #include "noise_functions.glsl"
 

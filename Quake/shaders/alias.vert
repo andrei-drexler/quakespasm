@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 #include "alias_instance_buffer.glsl"
 
 layout(std430, binding=2) restrict readonly buffer PoseBuffer

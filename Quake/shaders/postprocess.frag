@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(binding=0) uniform sampler2D GammaTexture;
 layout(binding=1) uniform usampler3D PaletteLUT;
 

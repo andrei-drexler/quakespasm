@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(binding=0) uniform sampler2D Tex;
 
 layout(location=0) centroid in vec2 in_uv;

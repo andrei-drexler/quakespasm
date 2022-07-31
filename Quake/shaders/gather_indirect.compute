@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(local_size_x=64) in;
 
 #include "draw_elements_indirect_command.glsl"

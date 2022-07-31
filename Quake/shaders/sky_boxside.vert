@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(location=0) uniform mat4 MVP;
 layout(location=1) uniform vec3 EyePos;
 

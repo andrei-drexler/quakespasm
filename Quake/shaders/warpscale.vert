@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(location=0) out vec2 out_uv;
 
 void main()

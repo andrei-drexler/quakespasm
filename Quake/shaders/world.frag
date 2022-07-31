@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 #include "light_cluster_image.glsl"
 
 @if BINDLESS

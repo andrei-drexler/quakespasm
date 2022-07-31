@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 #include "bindless_vertex_header.glsl"
 #include "framedata_buffer.glsl"
 #include "world_calldata_buffer.glsl"

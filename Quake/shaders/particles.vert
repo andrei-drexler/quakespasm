@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 #include "framedata_buffer.glsl"
 
 layout(location=0) in vec3 in_pos;

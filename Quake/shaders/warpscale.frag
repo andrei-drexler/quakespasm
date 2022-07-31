@@ -1,3 +1,4 @@
+#include "shader_defs.glsl"
 layout(binding=0) uniform sampler2D Tex;
 
 layout(location=0) uniform vec4 UVScaleWarpTime; // xy=Scale z=Warp w=Time
