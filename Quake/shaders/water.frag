@@ -5,8 +5,8 @@
 	layout(binding=0) uniform sampler2D Tex;
 @endif
 
-@include "framedata_buffer.glsl"
-@include "noise_functions.glsl"
+#include "framedata_buffer.glsl"
+#include "noise_functions.glsl"
 
 layout(location=0) flat in float in_alpha;
 layout(location=1) in vec2 in_uv;

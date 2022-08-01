@@ -3,6 +3,7 @@ layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
 
 #include "framedata_buffer.glsl"
 #include "light_buffer.glsl"
+#include "light_cluster_image.glsl"
 
 LIGHT_CLUSTER_IMAGE(writeonly)
 

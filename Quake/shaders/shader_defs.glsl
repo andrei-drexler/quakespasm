@@ -3,7 +3,6 @@
 
 #include "../shared_defs.h"
 
-
 #define SHOW_ACTIVE_LIGHT_CLUSTERS 0
 
 #endif

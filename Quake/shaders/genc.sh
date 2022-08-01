@@ -9,6 +9,13 @@ HEADER=shaders.h
 ppflags="-E -P -x c"
 cpp=cc
 
+if [ "$1" == "-d" ] ; then
+    shift
+    debug=1
+else
+    debug=0
+fi
+
 echo "#include \"$HEADER\"" >"$OUT"
 
 while [ "$1" != "" ] ; do
@@ -24,7 +31,9 @@ while [ "$1" != "" ] ; do
         shadername=`echo "glsl_$shaderfile" | sed 's/[ -.]/_/g'`
 
         ( $cpp $ppflags $shaderpath && head -c 1 /dev/zero )\
-            | sed 's/^.*@/#/'\
+            | sed 's/^\s*@/#/'\
+            | sed 's/\(\w*\)\s*@@\s*\(\w*\)/\1\2/'\
+            | ( [ $debug != 0 ] && tee "$shaderpath.dbout" || cat )\
             | xxd -i /dev/stdin\
             | sed -e s/_dev_stdin/$shadername/ -e 's/unsigned char/char/'\
             >>"$OUT"

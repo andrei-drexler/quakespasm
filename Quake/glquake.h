@@ -437,7 +437,8 @@ void R_DrawSpriteModels_ShowTris (entity_t **ents, int count);
 entity_t **R_GetVisEntities (modtype_t type, qboolean translucent, int *outcount);
 
 #define MAX_BMODEL_DRAWS		4096
-#define MAX_BMODEL_INSTANCES	1024
+// Moved to shared_defs.h -4LT
+//#define MAX_BMODEL_INSTANCES	1024
 
 typedef struct bmodel_draw_indirect_s {
 	GLuint		count;
