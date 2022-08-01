@@ -40,6 +40,16 @@ HOST_OS := $(shell uname|sed -e s/_.*//|tr '[:upper:]' '[:lower:]')
 DEBUG   ?= 0
 
 # ---------------------------
+# shaders
+# ---------------------------
+
+SHADERDIR=shaders
+GLSL_VERT=$(wildcard $(SHADERDIR)/*.vert)
+GLSL_FRAG=$(wildcard $(SHADERDIR)/*.frag)
+GLSL_COMPUTE=$(wildcard $(SHADERDIR)/*.compute)
+SHADERS=$(GLSL_VERT) $(GLSL_FRAG) $(GLSL_COMPUTE)
+
+# ---------------------------
 # build variables
 # ---------------------------
 
@@ -206,6 +216,29 @@ DEFAULT_TARGET := ironwail
 	@echo "Compiling $<" && \
 	$(CC) $(DFLAGS) -c $(CFLAGS) $(SDL_CFLAGS) -o $@ $<
 
+# --------------------------
+# shader rules
+# --------------------------
+
+$(SHADERDIR)/%.vert.d: $(SHADERDIR)/%.vert $(MAKEFILE)
+	@echo "Generating dependencies for $<" &&\
+	$(CC) $(DFLAGS) -c $(CFLAGS) $(SDL_CFLAGS) -x c -MM $< -MF $@ -MT $@
+
+$(SHADERDIR)/%.frag.d: $(SHADERDIR)/%.frag $(MAKEFILE)
+	@echo "Generating dependencies for $<" &&\
+	$(CC) $(DFLAGS) -c $(CFLAGS) $(SDL_CFLAGS) -x c -MM $< -MF $@ -MT $@
+
+$(SHADERDIR)/%.compute.d: $(SHADERDIR)/%.compute $(MAKEFILE)
+	@echo "Generating dependencies for $<" &&\
+	$(CC) $(DFLAGS) -c $(CFLAGS) $(SDL_CFLAGS) -x c -MM $< -MF $@ -MT $@
+
+$(SHADERDIR)/shaders.c: \
+		$(SHADERS)\
+		$(foreach shader,$(SHADERS),$(shader).d)\
+		$(MAKEFILE)
+	@echo "Generating source for shaders"
+	$(SHADERDIR)/genc.sh -c $(CC) $(SHADERS)
+
 # ----------------------------------------------------------------------------
 # objects
 # ----------------------------------------------------------------------------
@@ -252,7 +285,8 @@ GLOBJS = \
 	r_sprite.o \
 	r_alias.o \
 	r_brush.o \
-	gl_model.o
+	gl_model.o \
+	shaders/shaders.o
 
 OBJS := strlcat.o \
 	strlcpy.o \
@@ -317,6 +351,7 @@ debug:
 
 clean: $(MAKEFILE)
 	rm -f $(shell find . \( -name '*~' -o -name '#*#' -o -name '*.o' -o -name '*.d' -o -name '*.res' -o -name $(DEFAULT_TARGET) \) -print)
+	rm -f $(SHADERDIR)/shaders.c
 
 install:	ironwail
 	cp ironwail /usr/local/games/quake
