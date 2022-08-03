@@ -331,20 +331,39 @@ R_GetEntityBounds -- johnfitz -- uses correct bounds based on rotation
 */
 void R_GetEntityBounds (const entity_t *e, vec3_t mins, vec3_t maxs)
 {
+	vec3_t minbounds, maxbounds;
+	vec_t scalefactor;
+
 	if (e->angles[0] || e->angles[2]) //pitch or roll
 	{
-		VectorAdd (e->origin, e->model->rmins, mins);
-		VectorAdd (e->origin, e->model->rmaxs, maxs);
+		VectorCopy (e->model->rmins, minbounds);
+		VectorCopy (e->model->rmaxs, maxbounds);
+
 	}
 	else if (e->angles[1]) //yaw
 	{
-		VectorAdd (e->origin, e->model->ymins, mins);
-		VectorAdd (e->origin, e->model->ymaxs, maxs);
+		VectorCopy (e->model->ymins, minbounds);
+		VectorCopy (e->model->ymaxs, maxbounds);
 	}
 	else //no rotation
 	{
-		VectorAdd (e->origin, e->model->mins, mins);
-		VectorAdd (e->origin, e->model->maxs, maxs);
+		VectorCopy (e->model->mins, minbounds);
+		VectorCopy (e->model->maxs, maxbounds);
+	}
+
+	scalefactor = ENTSCALE_DECODE (e->scale);
+	if (scalefactor != 1.0f)
+	{
+		vec3_t scaledVec;
+		VectorScale (minbounds, scalefactor, scaledVec);
+		VectorAdd (e->origin, scaledVec, mins);
+		VectorScale (maxbounds, scalefactor, scaledVec);
+		VectorAdd (e->origin, scaledVec, maxs);
+	}
+	else
+	{
+		VectorAdd (e->origin, minbounds, mins);
+		VectorAdd (e->origin, maxbounds, maxs);
 	}
 }
 

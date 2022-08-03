@@ -388,6 +388,8 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 	float		model_matrix[16];
 	float		translation_matrix[16];
 	float		scale_matrix[16];
+	float		mscale_matrix[16];
+	float       scalefactor = 1.0f;
 	aliasinstance_t	*instance;
 
 	//
@@ -416,6 +418,12 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 	}
 
 	R_EntityMatrix (model_matrix, lerpdata.origin, lerpdata.angles);
+	scalefactor = ENTSCALE_DECODE (e->scale);
+	if (scalefactor != 1.0f)
+	{
+		ScaleMatrix (mscale_matrix, scalefactor, scalefactor, scalefactor);
+		MatrixMultiply (model_matrix, mscale_matrix);
+	}
 	TranslationMatrix (translation_matrix, paliashdr->scale_origin[0], paliashdr->scale_origin[1] * fovscale, paliashdr->scale_origin[2] * fovscale);
 	MatrixMultiply (model_matrix, translation_matrix);
 	ScaleMatrix (scale_matrix, paliashdr->scale[0], paliashdr->scale[1] * fovscale, paliashdr->scale[2] * fovscale);

@@ -75,6 +75,7 @@ typedef struct entity_s
 // FIXME: could turn these into a union
 	int						trivial_accept;
 
+	byte					scale;
 	byte					alpha;			//johnfitz -- alpha
 	byte					lerpflags;		//johnfitz -- lerping
 	float					lerpstart;		//johnfitz -- animation lerping
