@@ -4,3 +4,4 @@ Quake/*.o
 Quake/*.d
 Quake/*.res
 Quake/*.exe
+Quake/ironwail
