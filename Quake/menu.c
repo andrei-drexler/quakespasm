@@ -617,7 +617,7 @@ void M_Menu_Main_f (void)
 		m_save_demonum = cls.demonum;
 		cls.demonum = -1;
 	}
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_main;
 	m_entersound = true;
@@ -783,7 +783,7 @@ int	m_singleplayer_cursor;
 
 void M_Menu_SinglePlayer_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_singleplayer;
 	m_entersound = true;
@@ -917,7 +917,7 @@ void M_Menu_Load_f (void)
 	m_entersound = true;
 	m_state = m_load;
 
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	M_ScanSaves ();
 }
@@ -934,7 +934,7 @@ void M_Menu_Save_f (void)
 	m_entersound = true;
 	m_state = m_save;
 
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	M_ScanSaves ();
 }
@@ -1077,7 +1077,7 @@ int m_skill_cursor;
 
 void M_Menu_Skill_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_skill;
 	m_entersound = true;
@@ -1159,7 +1159,7 @@ int	m_multiplayer_cursor;
 
 void M_Menu_MultiPlayer_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_multiplayer;
 	m_entersound = true;
@@ -1256,7 +1256,7 @@ int		setup_bottom;
 
 void M_Menu_Setup_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_setup;
 	m_entersound = true;
@@ -1458,7 +1458,7 @@ const char *net_helpMessage [] =
 
 void M_Menu_Net_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_net;
 	m_entersound = true;
@@ -1604,7 +1604,7 @@ float target_scale_frac;
 
 void M_Menu_Options_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_options;
 	m_entersound = true;
@@ -2132,7 +2132,7 @@ static qboolean	bind_grab;
 
 void M_Menu_Keys_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_keys;
 	m_entersound = true;
@@ -2267,7 +2267,7 @@ void M_Keys_Key (int k)
 		}
 
 		bind_grab = false;
-		IN_Deactivate(); // deactivate because we're returning to the menu
+		IN_DeactivateForMenu(); // deactivate because we're returning to the menu
 		return;
 	}
 
@@ -2341,7 +2341,7 @@ int		help_page;
 
 void M_Menu_Help_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_help;
 	m_entersound = true;
@@ -2449,7 +2449,7 @@ void M_Menu_Quit_f (void)
 	if (m_state == m_quit)
 		return;
 	wasInMenus = (key_dest == key_menu);
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_quit_prevstate = m_state;
 	m_state = m_quit;
@@ -2500,7 +2500,7 @@ void M_Quit_Char (int key)
 
 	case 'y':
 	case 'Y':
-		IN_Deactivate();
+		IN_DeactivateForConsole();
 		key_dest = key_console;
 		Host_Quit_f ();
 		break;
@@ -2560,7 +2560,7 @@ char	lanConfig_joinname[22];
 
 void M_Menu_LanConfig_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_lanconfig;
 	m_entersound = true;
@@ -2930,7 +2930,7 @@ double m_serverInfoMessageTime;
 
 void M_Menu_GameOptions_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_gameoptions;
 	m_entersound = true;
@@ -3249,7 +3249,7 @@ double		searchCompleteTime;
 
 void M_Menu_Search_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_search;
 	m_entersound = false;
@@ -3310,7 +3310,7 @@ qboolean slist_sorted;
 
 void M_Menu_ServerList_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_slist;
 	m_entersound = true;
@@ -3488,7 +3488,7 @@ static void M_Mods_Init (void)
 
 void M_Menu_Mods_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	modsmenu.prev = m_state;
 	m_state = m_mods;

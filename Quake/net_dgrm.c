@@ -1395,7 +1395,7 @@ ErrorReturn2:
 	dfunc.Close_Socket(newsock);
 	if (m_return_onerror)
 	{
-		IN_Deactivate();
+		IN_DeactivateForMenu();
 		key_dest = key_menu;
 		m_state = m_return_state;
 		m_return_onerror = false;

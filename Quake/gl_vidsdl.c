@@ -685,8 +685,10 @@ static void VID_Restart (void)
 //
 // update mouse grab
 //
-	if (key_dest == key_console || key_dest == key_menu)
-		IN_Deactivate();
+	if (key_dest == key_console)
+		IN_DeactivateForConsole();
+	else if (key_dest == key_menu)
+		IN_DeactivateForMenu();
 }
 
 /*
@@ -1628,8 +1630,10 @@ void	VID_Toggle (void)
 		VID_SyncCvars();
 
 		// update mouse grab
-		if (key_dest == key_console || key_dest == key_menu)
-			IN_Deactivate();
+		if (key_dest == key_console)
+			IN_DeactivateForConsole();
+		else if (key_dest == key_menu)
+			IN_DeactivateForMenu();
 	}
 	else
 	{
@@ -2513,7 +2517,7 @@ VID_Menu_f
 */
 static void VID_Menu_f (void)
 {
-	IN_Deactivate();
+	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_video;
 	m_entersound = true;

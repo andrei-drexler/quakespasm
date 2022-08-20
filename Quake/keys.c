@@ -1237,7 +1237,7 @@ void Key_UpdateForDest (void)
 		if (cls.state != ca_connected)
 		{
 			forced = true;
-			IN_Deactivate();
+			IN_DeactivateForConsole();
 			key_dest = key_console;
 			break;
 		}

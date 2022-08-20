@@ -28,6 +28,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "SDL.h"
 #endif
 
+extern cvar_t cl_mousemenu;
+
 static qboolean	textmode;
 
 static cvar_t in_debugkeys = {"in_debugkeys", "0", CVAR_NONE};
@@ -92,12 +94,22 @@ static int SDLCALL IN_SDL2_FilterMouseEvents (void *userdata, SDL_Event *event)
 	return IN_FilterMouseEvents (event);
 }
 
+void IN_ShowCursor (void)
+{
+	if (SDL_SetRelativeMouseMode(SDL_FALSE) != 0)
+		Con_Printf("WARNING: could not disable relative mouse mode (%s).\n", SDL_GetError());
+}
+
+void IN_HideCursor (void)
+{
+	if (SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
+		Con_Printf("WARNING: could not enable relative mouse mode (%s).\n", SDL_GetError());
+}
+
 static void IN_BeginIgnoringMouseEvents(void)
 {
 	SDL_EventFilter currentFilter = NULL;
 	void *currentUserdata = NULL;
-	if (SDL_SetRelativeMouseMode(SDL_FALSE) != 0)
-		Con_Printf("WARNING: could not disable relative mouse mode (%s).\n", SDL_GetError());
 	SDL_GetEventFilter(&currentFilter, &currentUserdata);
 	if (currentFilter != IN_SDL2_FilterMouseEvents)
 		SDL_SetEventFilter(IN_SDL2_FilterMouseEvents, NULL);
@@ -107,8 +119,6 @@ static void IN_EndIgnoringMouseEvents(void)
 {
 	SDL_EventFilter currentFilter;
 	void *currentUserdata;
-	if (SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
-		Con_Printf("WARNING: could not enable relative mouse mode (%s).\n", SDL_GetError());
 	if (SDL_GetEventFilter(&currentFilter, &currentUserdata) == SDL_TRUE)
 		SDL_SetEventFilter(NULL, NULL);
 }
@@ -194,13 +204,14 @@ void IN_Activate (void)
 		IN_DisableOSXMouseAccel();
 #endif
 
+	IN_HideCursor();
 	IN_EndIgnoringMouseEvents();
 
 	total_dx = 0;
 	total_dy = 0;
 }
 
-void IN_Deactivate (void)
+void IN_Deactivate (qboolean free_cursor)
 {
 	if (no_mouse)
 		return;
@@ -210,8 +221,21 @@ void IN_Deactivate (void)
 		IN_ReenableOSXMouseAccel();
 #endif
 
+	if (free_cursor)
+		IN_ShowCursor();
+
 	/* discard all mouse events when input is deactivated */
 	IN_BeginIgnoringMouseEvents();
+}
+
+void IN_DeactivateForConsole (void)
+{
+	IN_Deactivate(modestate == MS_WINDOWED);
+}
+
+void IN_DeactivateForMenu (void)
+{
+	IN_Deactivate(modestate == MS_WINDOWED || cl_mousemenu.value);
 }
 
 void IN_StartupJoystick (void)
@@ -314,7 +338,7 @@ void IN_Init (void)
 void IN_Shutdown (void)
 {
 	Sys_RemoveKeyFilter();
-	IN_Deactivate();
+	IN_Deactivate(true);
 	IN_ShutdownJoystick();
 }
 
