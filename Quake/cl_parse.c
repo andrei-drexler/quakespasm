@@ -402,7 +402,7 @@ void CL_ParseServerInfo (void)
 		cl.model_precache[i] = Mod_ForName (model_precache[i], false);
 		if (cl.model_precache[i] == NULL)
 		{
-			Host_Error ("Model %s not found", model_precache[i]);
+			Con_Warning("Model %s not found.\n", model_precache[i]); // Qmaster -- was Host_Error
 		}
 		CL_KeepaliveMessage ();
 	}
