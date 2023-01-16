@@ -1,0 +1,16 @@
+name: Linux CI
+on: [push, pull_request]
+jobs:
+  build:
+    name: Linux / ${{ matrix.compiler }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: ["clang", "gcc"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Dependencies
+      run: sudo apt update && sudo apt install libcurl4-openssl-dev libmad0-dev libsdl2-dev libvorbis-dev
+    - name: Build
+      run: make --jobs=3 --keep-going --directory=Quake CC=${{ matrix.compiler }}

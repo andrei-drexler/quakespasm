@@ -1,0 +1,14 @@
+name: macOS CI
+on: [push, pull_request]
+jobs:
+  build:
+    name: macOS
+    runs-on: macos-12
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Dependencies
+      run: brew install libvorbis mad sdl2
+    - name: Build
+      run: make --jobs=3 --keep-going --directory=Quake COMMON_LIBS="-framework CoreFoundation -framework IOKit -framework OpenGL -Wl,-alias -Wl,_SDL_main -Wl,_main"
