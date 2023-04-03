@@ -369,7 +369,7 @@ static qboolean VID_ValidMode (int width, int height, int refreshrate, qboolean 
 VID_GetAspectRatioCVarValue
 
 get an aspect ratio from a cvar.
-if the cvar string in in the format x:y, such as 16:9, the fractional float aspect ratio is calculate.
+if the cvar string is in the format x:y, such as 16:9, the fractional float aspect ratio is calculated.
 otherwise the cvars float value is returned.
 ================
 */
