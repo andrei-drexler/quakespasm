@@ -1193,7 +1193,7 @@ void GL_Set2D (void)
 	glcanvas.type = CANVAS_INVALID;
 	glcanvas.texture = NULL;
 	glcanvas.blendmode = GLS_BLEND_ALPHA;
-	glViewport (glx, gly, glwidth, glheight);
+	glViewport (0, 0, glwidth, glheight);
 	GL_SetCanvas (CANVAS_DEFAULT);
 	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
 }
