@@ -846,10 +846,19 @@ void R_SetupGL (void)
 {
 	if (!GL_NeedsSceneEffects ())
 	{
-		GL_BindFramebufferFunc (GL_FRAMEBUFFER, GL_NeedsPostprocess () ? framebufs.composite.fbo : 0u);
+		qboolean needpostprocess = GL_NeedsPostprocess ();
+		int xoffset = 0;
+		int yoffset = 0;
+		if (!needpostprocess)
+		{
+			xoffset = glx;
+			yoffset = gly;
+		}
+
+		GL_BindFramebufferFunc (GL_FRAMEBUFFER, needpostprocess ? framebufs.composite.fbo : 0u);
 		framesetup.scene_fbo = framebufs.composite.fbo;
 		framesetup.oit_fbo = framebufs.oit.fbo_composite;
-		glViewport (r_refdef.vrect.x, glheight - r_refdef.vrect.y - r_refdef.vrect.height, r_refdef.vrect.width, r_refdef.vrect.height);
+		glViewport (xoffset+r_refdef.vrect.x, yoffset+glheight - r_refdef.vrect.y - r_refdef.vrect.height, r_refdef.vrect.width, r_refdef.vrect.height);
 	}
 	else
 	{
