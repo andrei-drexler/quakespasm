@@ -364,6 +364,15 @@ static qboolean VID_ValidMode (int width, int height, int refreshrate, qboolean 
 	return true;
 }
 
+/*
+================
+VID_GetAspectRatioCVarValue
+
+get an aspect ratio from a cvar.
+if the cvar string in in the format x:y, such as 16:9, the fractional float aspect ratio is calculate.
+otherwise the cvars float value is returned.
+================
+*/
 static float VID_GetAspectRatioCVarValue (cvar_t* cvar)
 {
 	float aspect = cvar->value;
@@ -377,6 +386,13 @@ static float VID_GetAspectRatioCVarValue (cvar_t* cvar)
 	return aspect;
 }
 
+/*
+================
+VID_UpdateRes
+
+setup vid.width and vid.height and account for vid_maxaspect.
+================
+*/
 static void VID_UpdateRes ()
 {
 	float maxaspect = VID_GetAspectRatioCVarValue (&vid_maxaspect);
@@ -387,6 +403,7 @@ static void VID_UpdateRes ()
 	if (maxaspect > 0)
 		vid.width = q_min (vid.width, (int)floor (vid.height*maxaspect+0.5f));
 }
+
 /*
 ================
 VID_SetMode
