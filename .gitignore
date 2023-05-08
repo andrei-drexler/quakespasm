@@ -5,3 +5,4 @@ Quake/*.d
 Quake/*.res
 Quake/*.exe
 Quake/ironwail
+*.DS_STORE
