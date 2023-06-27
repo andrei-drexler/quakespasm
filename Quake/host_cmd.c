@@ -642,7 +642,7 @@ done:
 	if (header)
 		curl_slist_free_all (header);
 	curl_easy_cleanup (curl);
-	curl_multi_cleanup (curl);
+	curl_multi_cleanup (multi_handle);
 
 	return !download->error && !still_running && download->response == 200;
 }
