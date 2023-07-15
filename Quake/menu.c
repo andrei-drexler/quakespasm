@@ -1375,7 +1375,7 @@ void M_ScanSaves (void)
 		fclose (f);
 	}
 
-	for (i = 0; i < MAX_SAVEGAMES; i++)
+	for (i = 0; i < MAX_SAVEGAMES - 1; i++)
 	{
 		strcpy (m_filenames[i+1], "--- UNUSED SLOT ---");
 		loadable[i+1] = false;
