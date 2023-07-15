@@ -1343,7 +1343,7 @@ void M_SinglePlayer_Mousemove (int cx, int cy)
 
 int		load_cursor;		// 0 < load_cursor < MAX_SAVEGAMES
 
-#define	MAX_SAVEGAMES		20	/* johnfitz -- increased from 12 */
+#define	MAX_SAVEGAMES		21	/* johnfitz -- increased from 12 */
 char	m_filenames[MAX_SAVEGAMES][SAVEGAME_COMMENT_LENGTH+1];
 int		loadable[MAX_SAVEGAMES];
 
