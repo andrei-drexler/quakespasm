@@ -1354,25 +1354,46 @@ void M_ScanSaves (void)
 	FILE	*f;
 	int	version;
 
+	//load a quicksave
+	strcpy (m_filenames[0], "--- UNUSED SLOT ---");
+	loadable[0] = false;
+	q_snprintf (name, sizeof(name), "%s/quick.sav", com_gamedir);
+	f = Sys_fopen (name, "r");
+	if (f)
+	{
+		fscanf (f, "%i\n", &version);
+		fscanf (f, "%79s\n", name);
+		q_strlcpy (m_filenames[0], name, SAVEGAME_COMMENT_LENGTH+1);
+
+		// change _ back to space
+		for (j = 0; j < SAVEGAME_COMMENT_LENGTH; j++)
+		{
+			if (m_filenames[0][j] == '_')
+				m_filenames[0][j] = ' ';
+		}
+		loadable[0] = true;
+		fclose (f);
+	}
+
 	for (i = 0; i < MAX_SAVEGAMES; i++)
 	{
-		strcpy (m_filenames[i], "--- UNUSED SLOT ---");
-		loadable[i] = false;
+		strcpy (m_filenames[i+1], "--- UNUSED SLOT ---");
+		loadable[i+1] = false;
 		q_snprintf (name, sizeof(name), "%s/s%i.sav", com_gamedir, i);
 		f = Sys_fopen (name, "r");
 		if (!f)
 			continue;
 		fscanf (f, "%i\n", &version);
 		fscanf (f, "%79s\n", name);
-		q_strlcpy (m_filenames[i], name, SAVEGAME_COMMENT_LENGTH+1);
+		q_strlcpy (m_filenames[i+1], name, SAVEGAME_COMMENT_LENGTH+1);
 
 	// change _ back to space
 		for (j = 0; j < SAVEGAME_COMMENT_LENGTH; j++)
 		{
-			if (m_filenames[i][j] == '_')
-				m_filenames[i][j] = ' ';
+			if (m_filenames[i+1][j] == '_')
+				m_filenames[i+1][j] = ' ';
 		}
-		loadable[i] = true;
+		loadable[i+1] = true;
 		fclose (f);
 	}
 }
@@ -1460,7 +1481,10 @@ void M_Load_Key (int k)
 		key_dest = key_game;
 
 	// issue the load command
-		Cbuf_AddText (va ("load s%i\n", load_cursor) );
+		if(load_cursor == 0)
+			Cbuf_AddText ("load quick\n");
+		else
+			Cbuf_AddText (va("load s%i\n", load_cursor));
 		return;
 
 	case K_UPARROW:
@@ -1500,7 +1524,10 @@ void M_Save_Key (int k)
 		m_state = m_none;
 		IN_Activate();
 		key_dest = key_game;
-		Cbuf_AddText (va("save s%i\n", load_cursor));
+		if(load_cursor == 0)
+			Cbuf_AddText (va("save quick\n", load_cursor));
+		else
+			Cbuf_AddText (va("save s%i\n", load_cursor));
 		return;
 
 	case K_UPARROW:
