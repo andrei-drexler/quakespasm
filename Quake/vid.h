@@ -85,11 +85,18 @@ void	VID_Shutdown (void); // Called at shutdown
 void	VID_SyncCvars (void);
 void	VID_Toggle (void);
 
+typedef enum
+{
+	MOUSECURSOR_DEFAULT,
+	MOUSECURSOR_HAND,
+} mousecursor_t;
+
 void		*VID_GetWindow (void);
 qboolean	VID_HasMouseOrInputFocus (void);
 qboolean	VID_IsMinimized (void);
 void		VID_Lock (void);
 void		VID_SetWindowTitle (const char *title);
+void		VID_SetMouseCursor (mousecursor_t cursor);
 void		VID_RecalcConsoleSize (void);
 void		VID_RecalcInterfaceSize (void);
 

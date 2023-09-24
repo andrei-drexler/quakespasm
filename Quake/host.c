@@ -285,7 +285,9 @@ void Host_WriteConfigurationToFile (const char *name)
 // config.cfg cvars
 	if (host_initialized && !isDedicated && !host_parms->errstate)
 	{
-		f = Sys_fopen (va("%s/%s", com_gamedir, name), "w");
+		char fullname[MAX_OSPATH];
+		q_snprintf (fullname, sizeof (fullname), "%s/%s", com_gamedir, name);
+		f = Sys_fopen (fullname, "w");
 		if (!f)
 		{
 			Con_Printf ("Couldn't write %s.\n", name);
@@ -304,7 +306,9 @@ void Host_WriteConfigurationToFile (const char *name)
 
 		fclose (f);
 
-		Con_Printf ("Wrote %s.\n", name);
+		Con_SafePrintf ("Wrote ");
+		Con_LinkPrintf (fullname, "%s", name);
+		Con_SafePrintf (".\n");
 	}
 }
 
@@ -1067,6 +1071,43 @@ static void CL_LoadCSProgs (void)
 
 /*
 ==================
+Host_PrintTimes
+==================
+*/
+static void Host_PrintTimes (const double times[], const char *names[], int count, qboolean showtotal)
+{
+	char line[1024];
+	double total = 0.0;
+	int i, worst;
+
+	for (i = 0, worst = -1; i < count; i++)
+	{
+		if (worst == -1 || times[i] > times[worst])
+			worst = i;
+		total += times[i];
+	}
+
+	if (showtotal)
+		q_snprintf (line, sizeof (line), "%5.2f tot | ", total * 1000.0);
+	else
+		line[0] = '\0';
+
+	for (i = 0; i < count; i++)
+	{
+		char entry[256];
+		q_snprintf (entry, sizeof (entry), "%5.2f %s", times[i] * 1000.0, names[i]);
+		if (i == worst)
+			COM_TintString (entry, entry, sizeof (entry));
+		if (i != 0)
+			q_strlcat (line, " | ", sizeof (line));
+		q_strlcat (line, entry, sizeof (line));
+	}
+
+	Con_Printf ("%s\n", line);
+}
+
+/*
+==================
 Host_Frame
 
 Runs all active servers
@@ -1178,9 +1219,7 @@ void _Host_Frame (double time)
 
 	if (host_speeds.value)
 	{
-		static double pass1 = 0.0;
-		static double pass2 = 0.0;
-		static double pass3 = 0.0;
+		static double pass[3] = {0.0, 0.0, 0.0};
 		static double elapsed = 0.0;
 		static int numframes = 0;
 		static int numserverframes = 0;
@@ -1191,26 +1230,24 @@ void _Host_Frame (double time)
 
 		if (ranserver || host_speeds.value < 0.f)
 		{
-			pass1 += time1;
+			pass[0] += time1;
 			numserverframes++;
 		}
 		numframes++;
-		pass2 += time2;
-		pass3 += time3;
+		pass[1] += time2;
+		pass[2] += time3;
 		elapsed += time;
 
 		if (elapsed >= host_speeds.value * 0.375)
 		{
-			pass1 /= q_max (numserverframes, 1);
-			pass2 /= numframes;
-			pass3 /= numframes;
-			if (host_speeds.value < 0.f)
-				Con_Printf ("%5.2f tot | %5.2f server | %5.2f gfx | %5.2f snd\n",
-					(pass1+pass2+pass3)*1000.0, pass1*1000.0, pass2*1000.0, pass3*1000.0);
-			else
-				Con_Printf ("%5.2f server | %5.2f gfx | %5.2f snd\n",
-					pass1*1000.0, pass2*1000.0, pass3*1000.0);
-			pass1 = pass2 = pass3 = elapsed = 0.0;
+			const char *names[3] = {"server", "gfx", "snd"};
+			pass[0] /= q_max (numserverframes, 1);
+			pass[1] /= numframes;
+			pass[2] /= numframes;
+
+			Host_PrintTimes (pass, names, countof (pass), host_speeds.value < 0.f);
+
+			pass[0] = pass[1] = pass[2] = elapsed = 0.0;
 			numframes = numserverframes = 0;
 		}
 	}

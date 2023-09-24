@@ -52,6 +52,8 @@ typedef struct edict_s
 	qboolean	forcewater;			/* mod overrides waterlevel */
 	qboolean	sendforcewater;		/* waterlevel override has changed and needs to be sent over to the client */
 	qboolean	sendinterval;		/* johnfitz -- send time until nextthink to client for better lerp timing */
+	float		oldframe;
+	float		oldthinktime;
 
 	float		freetime;		/* sv.time when the object was freed */
 	entvars_t	v;			/* C exported fields from progs */

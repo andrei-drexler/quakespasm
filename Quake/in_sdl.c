@@ -87,6 +87,8 @@ static int SDLCALL IN_FilterMouseEvents (const SDL_Event *event)
 	// case SDL_MOUSEBUTTONUP:
 		if (key_dest == key_menu)
 			M_Mousemove (event->motion.x, event->motion.y);
+		else if (key_dest == key_console)
+			Con_Mousemove (event->motion.x, event->motion.y);
 		return 0;
 	}
 
@@ -244,7 +246,7 @@ void IN_Deactivate (qboolean free_cursor)
 
 void IN_DeactivateForConsole (void)
 {
-	IN_Deactivate(modestate == MS_WINDOWED);
+	IN_Deactivate(true);
 }
 
 void IN_DeactivateForMenu (void)
@@ -935,6 +937,8 @@ void IN_SendKeyEvents (void)
 			}
 			if (key_dest == key_menu)
 				M_Mousemove (event.button.x, event.button.y);
+			else if (key_dest == key_console)
+				Con_Mousemove (event.button.x, event.button.y);
 			Key_Event(buttonremap[event.button.button - 1], event.button.state == SDL_PRESSED);
 			break;
 

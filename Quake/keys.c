@@ -30,9 +30,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define		HISTORY_FILE_NAME "history.txt"
 
 char		key_lines[CMDLINES][MAXCMDLINE];
+char		key_tabhint[MAXCMDLINE];
 
 int		key_linepos;
-int		key_insert;	//johnfitz -- insert key toggle (for editing)
+int		key_insert = 1;	//johnfitz -- insert key toggle (for editing)
 double		key_blinktime; //johnfitz -- fudge cursor blinking to make it easier to spot in certain cases
 
 int		edit_line = 0;
@@ -308,12 +309,13 @@ void Key_Console (int key)
 		key_lines[edit_line][0] = ']';
 		key_lines[edit_line][1] = 0; //johnfitz -- otherwise old history items show up in the new edit line
 		key_linepos = 1;
+		key_tabhint[0] = '\0';
 		if (cls.state == ca_disconnected)
 			SCR_UpdateScreen (); // force an update, because the command may take some time
 		return;
 
 	case K_TAB:
-		Con_TabComplete ();
+		Con_TabComplete (TABCOMPLETE_USER);
 		return;
 
 	case K_BACKSPACE:
@@ -327,6 +329,7 @@ void Key_Console (int key)
 			SDL_assert ((int)len >= numchars);
 			memmove (workline, workline + numchars, len + 1 - numchars);
 			key_linepos -= numchars;
+			Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		}
 		return;
 
@@ -340,6 +343,7 @@ void Key_Console (int key)
 			len = strlen (workline);
 			SDL_assert ((int)len >= numchars);
 			memmove (workline, workline + numchars, len + 1 - numchars);
+			Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		}
 		return;
 
@@ -364,12 +368,14 @@ void Key_Console (int key)
 			con_backscroll = CLAMP(0, con_current-i%con_totallines-2, con_totallines-(glheight>>3)-1);
 		}
 		else	key_linepos = 1;
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case K_END:
 		if (keydown[K_CTRL])
 			con_backscroll = 0;
 		else	key_linepos = strlen(workline);
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case K_PGUP:
@@ -394,6 +400,7 @@ void Key_Console (int key)
 			else
 				key_linepos--;
 			key_blinktime = realtime;
+			Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		}
 		return;
 
@@ -417,6 +424,7 @@ void Key_Console (int key)
 				key_linepos++;
 			key_blinktime = realtime;
 		}
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case K_UPARROW:
@@ -439,6 +447,7 @@ void Key_Console (int key)
 		len = strlen(key_lines[history_line]);
 		memmove(workline, key_lines[history_line], len+1);
 		key_linepos = (int)len;
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case K_DOWNARROW:
@@ -463,12 +472,14 @@ void Key_Console (int key)
 			memmove(workline, key_lines[history_line], len+1);
 		}
 		key_linepos = (int)len;
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case K_INS:
 		if (keydown[K_SHIFT])		/* Shift-Ins paste */
 			PasteToConsole();
 		else	key_insert ^= 1;
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
 
 	case 'v':
@@ -476,11 +487,13 @@ void Key_Console (int key)
 #if defined(PLATFORM_OSX) || defined(PLATFORM_MAC)
 		if (keydown[K_COMMAND]) {	/* Cmd+v paste (Mac-only) */
 			PasteToConsole();
+			Con_TabComplete (TABCOMPLETE_AUTOHINT);
 			return;
 		}
 #endif
 		if (keydown[K_CTRL]) {		/* Ctrl+v paste */
 			PasteToConsole();
+			Con_TabComplete (TABCOMPLETE_AUTOHINT);
 			return;
 		}
 		break;
@@ -493,6 +506,7 @@ void Key_Console (int key)
 			workline[1] = 0;
 			key_linepos = 1;
 			history_line= edit_line;
+			key_tabhint[0] = '\0';
 			return;
 		}
 		break;
@@ -527,6 +541,8 @@ void Char_Console (int key)
 				workline[1] = 0;
 		}
 		key_linepos++;
+
+		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 	}
 }
 
@@ -946,6 +962,7 @@ void Key_Init (void)
 	consolekeys[K_KP_ENTER] = true;
 	consolekeys[K_KP_INS] = true;
 	consolekeys[K_KP_DEL] = true;
+	consolekeys[K_MOUSE1] = true;
 #if defined(PLATFORM_OSX) || defined(PLATFORM_MAC)
 	consolekeys[K_COMMAND] = true;
 #endif
@@ -1124,6 +1141,8 @@ void Key_Event (int key, qboolean down)
 			sprintf (cmd, "-%s %i\n", kb+1, key);
 			Cbuf_AddText (cmd);
 		}
+		if (key_dest == key_console && key == K_MOUSE1 && !down)
+			Con_Click ();
 		return;
 	}
 

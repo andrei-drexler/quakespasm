@@ -2539,7 +2539,7 @@ qboolean Mod_LoadMapDescription (char *desc, size_t maxchars, const char *map)
 			is_classname = i != 0 && !strcmp (com_token, "classname");
 
 			// parse value
-			data = COM_Parse (data);
+			data = COM_ParseEx (data, CPE_ALLOWTRUNC);
 			if (!data)
 				return ret;
 

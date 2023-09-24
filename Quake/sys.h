@@ -57,6 +57,9 @@ const char *Sys_GetEGSLauncherData (void);
 // (to avoid writing in Nightdive Studios/Quake)
 qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *path, size_t pathsize);
 
+// shows path in file browser
+qboolean Sys_Explore (const char *path);
+
 //
 // file IO
 //

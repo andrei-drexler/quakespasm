@@ -83,14 +83,7 @@ cvar_t		snd_mixspeed = {"snd_mixspeed", "44100", CVAR_NONE};
 
 cvar_t		snd_waterfx = {"snd_waterfx", "1", CVAR_ARCHIVE};
 
-#if defined(_WIN32)
-#define SND_FILTERQUALITY_DEFAULT "5"
-#else
-#define SND_FILTERQUALITY_DEFAULT "1"
-#endif
-
-cvar_t		snd_filterquality = {"snd_filterquality", SND_FILTERQUALITY_DEFAULT,
-								 CVAR_NONE};
+cvar_t		snd_filterquality = {"snd_filterquality", "5", CVAR_ARCHIVE};
 
 static	cvar_t	nosound = {"nosound", "0", CVAR_NONE};
 static	cvar_t	ambient_level = {"ambient_level", "0.3", CVAR_NONE};
@@ -128,7 +121,7 @@ static void SND_Callback_snd_filterquality (cvar_t *var)
 	if (snd_filterquality.value < 1 || snd_filterquality.value > 5)
 	{
 		Con_Printf ("snd_filterquality must be between 1 and 5\n");
-		Cvar_SetQuick (&snd_filterquality, SND_FILTERQUALITY_DEFAULT);
+		Cvar_SetQuick (&snd_filterquality, snd_filterquality.default_string);
 	}
 }
 
@@ -185,7 +178,7 @@ void S_Init (void)
 	Cvar_RegisterVariable(&snd_mixspeed);
 	Cvar_RegisterVariable(&snd_filterquality);
 	Cvar_RegisterVariable(&snd_waterfx);
-	
+
 	if (safemode || COM_CheckParm("-nosound"))
 		return;
 
@@ -1102,4 +1095,3 @@ void S_BeginPrecaching (void)
 void S_EndPrecaching (void)
 {
 }
-

@@ -270,7 +270,14 @@ extern int q_vsnprintf(char *str, size_t size, const char *format, va_list args)
 extern	THREAD_LOCAL char		com_token[1024];
 extern	qboolean	com_eof;
 
+typedef enum
+{
+	CPE_NOTRUNC,					// return parse error in case of overflow
+	CPE_ALLOWTRUNC,					// truncate com_token in case of overflow
+} cpe_mode;
+
 const char *COM_Parse (const char *data);
+const char *COM_ParseEx (const char *data, cpe_mode mode);
 
 
 extern	int		com_argc;

@@ -280,7 +280,7 @@ Alias models are position independent, so the cache manager can move them.
 // split out to keep vertex sizes down
 typedef struct aliasmesh_s
 {
-	float st[2];
+	short st[2];
 	unsigned short vertindex;
 } aliasmesh_t;
 
@@ -355,9 +355,6 @@ typedef struct {
 	//ericw --
 
 	int					numposes;
-	int					poseverts;
-	int					posedata;	// numposes*poseverts trivert_t
-	int					commands;	// gl command list with embedded s/t
 	struct gltexture_s	*gltextures[MAX_SKINS][4]; //johnfitz
 	struct gltexture_s	*fbtextures[MAX_SKINS][4]; //johnfitz
 	int					texels[MAX_SKINS];	// only for player skins

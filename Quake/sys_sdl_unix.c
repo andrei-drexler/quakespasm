@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <sys/types.h>
 #include <errno.h>
 #include <unistd.h>
+#include <string.h>
 #ifdef PLATFORM_OSX
 #include <libgen.h>	/* dirname() and basename() */
 #endif
@@ -407,6 +408,80 @@ qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *dst, size_t dstsize)
 		return false;
 
 	return true;
+}
+
+static qboolean Sys_Exec (const char *cmd, ...)
+{
+	pid_t p = fork ();
+	if (p < 0) // fork failed
+		return false;
+	else if (p == 0) // child process
+	{
+		va_list		argptr;
+		const char	*argv[1024];
+		size_t		argc;
+		FILE		*dummy;
+
+		argv[0] = (char *)cmd;
+		argc = 1;
+
+		va_start (argptr, cmd);
+		for (; argc + 1 < countof (argv); argc++)
+		{
+			const char *cur = va_arg (argptr, const char*);
+			if (!cur)
+				break;
+			argv[argc] = cur;
+		}
+		va_end (argptr);
+		argv[argc++] = NULL;
+
+		// Disable stdout/stderr
+		// Note: using a dummy variable to avoid triggering -Wunused-result
+		dummy = freopen ("/dev/null", "w", stdout); (void)dummy;
+		dummy = freopen ("/dev/null", "w", stderr); (void)dummy;
+
+		execvp (cmd, (char **) argv);
+
+		exit (EXIT_FAILURE);
+	}
+	else // original process
+	{
+		return true;
+	}
+}
+
+qboolean Sys_Explore (const char *path)
+{
+	char buf[32768];
+	char *s;
+
+	if (Sys_FileType (path) == FS_ENT_NONE)
+		return false;
+
+	// Try to identify the current desktop so we can open the parent dir in the file manager *and* select the right file in it
+	s = getenv ("XDG_CURRENT_DESKTOP");
+	if (s)
+	{
+		char *cur = NULL;
+		char *desktop = NULL;
+		q_strlcpy (buf, s, sizeof (buf));
+		for (desktop = strtok_r (buf, ":", &cur); desktop; desktop = strtok_r (NULL, ":", &cur))
+		{
+			if (q_strcasecmp (desktop, "gnome") == 0)
+				return Sys_Exec ("nautilus", "--select", path);
+			if (q_strcasecmp (desktop, "kde") == 0)
+				return Sys_Exec ("dolphin", "--select", path);
+		}
+	}
+
+	// Fall back to just opening the parent dir without selecting the file
+	q_strlcpy (buf, path, sizeof (buf));
+	s = Q_strrchr (buf, '/');
+	if (!s)
+		return false;
+	s[1] = '\0'; // terminate after the slash
+	return SDL_OpenURL (buf) == 0;
 }
 
 #ifdef PLATFORM_OSX

@@ -508,6 +508,57 @@ qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *path, size_t pathsize
 	return Sys_GetKnownFolder (&FOLDERID_SavedGames, subdir, path, pathsize);
 }
 
+qboolean Sys_Explore (const char *path)
+{
+	wchar_t			wpath[MAX_PATH];
+	LPITEMIDLIST	file, folder;
+	HRESULT			hr;
+	SFGAOF			sfgaof;
+	int				i, slash;
+	qboolean		result = false;
+
+	if (Sys_FileType (path) == FS_ENT_NONE)
+		return false;
+
+	UTF8ToWideString (path, wpath, countof (wpath));
+	for (i = 0, slash = -1; wpath[i]; i++)
+	{
+		if (wpath[i] == L'/')
+			wpath[i] = L'\\';
+		if (wpath[i] == L'\\')
+			slash = i;
+	}
+
+	if (slash == -1)
+		return false;
+
+	hr = Sys_InitCOM ();
+	if (FAILED (hr))
+		return false;
+
+	wpath[slash] = L'\0';
+	hr = SHParseDisplayName (wpath, NULL, &folder, 0, &sfgaof);
+	if (FAILED (hr))
+		goto cleanup_com;
+
+	wpath[slash] = L'\\';
+	hr = SHParseDisplayName (wpath, NULL, &file, 0, &sfgaof);
+	if (FAILED (hr))
+		goto cleanup_folder;
+
+	hr = SHOpenFolderAndSelectItems (folder, 1, &file, 0);
+	if (SUCCEEDED (hr))
+		result = true;
+
+	CoTaskMemFree (file);
+cleanup_folder:
+	CoTaskMemFree (folder);
+cleanup_com:
+	CoUninitialize ();
+
+	return result;
+}
+
 static char	cwd[1024];
 
 static void Sys_GetBasedir (char *argv0, char *dst, size_t dstsize)

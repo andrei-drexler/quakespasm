@@ -88,6 +88,7 @@ cvar_t		scr_conscale = {"scr_conscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_crosshairscale = {"scr_crosshairscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_pixelaspect = {"scr_pixelaspect", "1", CVAR_ARCHIVE};
 cvar_t		scr_showfps = {"scr_showfps", "0", CVAR_ARCHIVE};
+cvar_t		scr_showspeed = {"scr_showspeed", "0", CVAR_ARCHIVE};
 cvar_t		scr_clock = {"scr_clock", "0", CVAR_ARCHIVE};
 //johnfitz
 cvar_t		scr_usekfont = {"scr_usekfont", "0", CVAR_NONE}; // 2021 re-release
@@ -526,6 +527,7 @@ void SCR_Init (void)
 	Cvar_RegisterVariable (&scr_conscale);
 	Cvar_RegisterVariable (&scr_crosshairscale);
 	Cvar_RegisterVariable (&scr_showfps);
+	Cvar_RegisterVariable (&scr_showspeed);
 	Cvar_RegisterVariable (&scr_clock);
 	Cvar_RegisterVariable (&scr_hudstyle);
 	Cvar_RegisterVariable (&cl_screenshotname);
@@ -629,6 +631,52 @@ void SCR_DrawFPS (void)
 		}
 		Draw_String (x, y, st);
 		scr_tileclear_updates = 0;
+	}
+}
+
+/*
+==============
+SCR_DrawSpeed
+==============
+*/
+void SCR_DrawSpeed (void)
+{
+	const float show_speed_interval_value = 0.05f;
+	static float maxspeed = 0, display_speed = -1;
+	static double lastrealtime = 0;
+	float speed;
+	vec3_t vel;
+
+	if (lastrealtime > realtime)
+	{
+		lastrealtime = 0;
+		display_speed = -1;
+		maxspeed = 0;
+	}
+
+	VectorCopy (cl.velocity, vel);
+	vel[2] = 0;
+	speed = VectorLength (vel);
+
+	if (speed > maxspeed)
+		maxspeed = speed;
+
+	if (scr_showspeed.value)
+	{
+		if (display_speed >= 0)
+		{
+			char str[12];
+			sprintf (str, "%d", (int) display_speed);
+			GL_SetCanvas (CANVAS_CROSSHAIR);
+			Draw_String (-(int)strlen(str)*4, 4, str);
+		}
+	}
+
+	if (realtime - lastrealtime >= show_speed_interval_value)
+	{
+		lastrealtime = realtime;
+		display_speed = maxspeed;
+		maxspeed = 0;
 	}
 }
 
@@ -1209,7 +1257,11 @@ void SCR_ScreenShot_f (void)
 
 	UTF8_ToQuake (basename, sizeof (basename), imagename);
 	if (ok)
-		Con_Printf ("Wrote %s\n", basename);
+	{
+		Con_SafePrintf ("Wrote ");
+		Con_LinkPrintf (va("%s/%s", com_gamedir, imagename), "%s", basename);
+		Con_SafePrintf ("\n");
+	}
 	else
 		Con_Printf ("SCR_ScreenShot_f: Couldn't create %s\n", basename);
 
@@ -1493,6 +1545,7 @@ void SCR_UpdateScreen (void)
 		Sbar_Draw ();
 		SCR_DrawDevStats (); //johnfitz
 		SCR_DrawClock (); //johnfitz
+		SCR_DrawSpeed ();
 		SCR_DrawConsole ();
 		M_Draw ();
 		SCR_DrawFPS (); //johnfitz

@@ -24,9 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 /* crc.h */
 
-void CRC_Init(unsigned short *crcvalue);
-void CRC_ProcessByte(unsigned short *crcvalue, byte data);
-unsigned short CRC_Value(unsigned short crcvalue);
 unsigned short CRC_Block (const void *start, int count); //johnfitz -- texture crc
 
 #endif	/* _QUAKE_CRC_H */

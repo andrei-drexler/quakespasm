@@ -1253,12 +1253,16 @@ char *COM_TintString (const char *in, char *out, size_t outsize)
 
 /*
 ==============
-COM_Parse
+COM_ParseEx
 
 Parse a token out of a string
+
+The mode argument controls how overflow is handled:
+- CPE_NOTRUNC:		return NULL (abort parsing)
+- CPE_ALLOWTRUNC:	truncate com_token (ignore the extra characters in this token)
 ==============
 */
-const char *COM_Parse (const char *data)
+const char *COM_ParseEx (const char *data, cpe_mode mode)
 {
 	int		c;
 	int		len;
@@ -1310,16 +1314,20 @@ skipwhite:
 				com_token[len] = 0;
 				return data;
 			}
-			com_token[len] = c;
-			len++;
+			if (len < countof (com_token) - 1)
+				com_token[len++] = c;
+			else if (mode == CPE_NOTRUNC)
+				return NULL;
 		}
 	}
 
 // parse single characters
 	if (c == '{' || c == '}'|| c == '('|| c == ')' || c == '\'' || c == ':')
 	{
-		com_token[len] = c;
-		len++;
+		if (len < countof (com_token) - 1)
+			com_token[len++] = c;
+		else if (mode == CPE_NOTRUNC)
+			return NULL;
 		com_token[len] = 0;
 		return data+1;
 	}
@@ -1327,9 +1335,11 @@ skipwhite:
 // parse a regular word
 	do
 	{
-		com_token[len] = c;
+		if (len < countof (com_token) - 1)
+			com_token[len++] = c;
+		else if (mode == CPE_NOTRUNC)
+			return NULL;
 		data++;
-		len++;
 		c = *data;
 		/* commented out the check for ':' so that ip:port works */
 		if (c == '{' || c == '}'|| c == '('|| c == ')' || c == '\''/* || c == ':' */)
@@ -1338,6 +1348,21 @@ skipwhite:
 
 	com_token[len] = 0;
 	return data;
+}
+
+
+/*
+==============
+COM_Parse
+
+Parse a token out of a string
+
+Return NULL in case of overflow
+==============
+*/
+const char *COM_Parse (const char *data)
+{
+	return COM_ParseEx (data, CPE_NOTRUNC);
 }
 
 
@@ -2082,7 +2107,7 @@ const char *COM_ParseFloatNewline(const char *buffer, float *value)
 const char *COM_ParseStringNewline(const char *buffer)
 {
 	int i;
-	for (i = 0; i < 1023; i++)
+	for (i = 0; i < countof (com_token) - 1; i++)
 		if (!buffer[i] || q_isspace (buffer[i]))
 			break;
 	memcpy (com_token, buffer, i);
@@ -2111,7 +2136,6 @@ static pack_t *COM_LoadPackFile (const char *packfile)
 	pack_t		*pack;
 	int		packhandle;
 	dpackfile_t	info[MAX_FILES_IN_PACK];
-	unsigned short	crc;
 
 	if (Sys_FileOpenRead (packfile, &packhandle) == -1)
 		return NULL;
@@ -2148,11 +2172,12 @@ static pack_t *COM_LoadPackFile (const char *packfile)
 	Sys_FileRead (packhandle, (void *)info, header.dirlen);
 
 	// crc the directory to check for modifications
-	CRC_Init (&crc);
-	for (i = 0; i < header.dirlen; i++)
-		CRC_ProcessByte (&crc, ((byte *)info)[i]);
-	if (crc != PAK0_CRC_V106 && crc != PAK0_CRC_V101 && crc != PAK0_CRC_V100)
-		com_modified = true;
+	if (!com_modified)
+	{
+		unsigned short	crc = CRC_Block (info, header.dirlen);
+		if (crc != PAK0_CRC_V106 && crc != PAK0_CRC_V101 && crc != PAK0_CRC_V100)
+			com_modified = true;
+	}
 
 	// parse the directory
 	for (i = 0; i < numpackfiles; i++)
@@ -2755,7 +2780,14 @@ storesetup:
 	{
 		quakeflavor_t flavor;
 		if (original[0] && remastered[0])
-			flavor = ChooseQuakeFlavor ();
+		{
+			if (COM_CheckParm ("-prefremaster") || COM_CheckParm ("-remaster") || COM_CheckParm ("-remastered"))
+				flavor = QUAKE_FLAVOR_REMASTERED;
+			else if (COM_CheckParm ("-preforiginal") || COM_CheckParm ("-original"))
+				flavor = QUAKE_FLAVOR_ORIGINAL;
+			else
+				flavor = ChooseQuakeFlavor ();
+		}
 		else
 			flavor = remastered[0] ? QUAKE_FLAVOR_REMASTERED : QUAKE_FLAVOR_ORIGINAL;
 		q_strlcpy (path, flavor == QUAKE_FLAVOR_REMASTERED ? remastered : original, sizeof (path));

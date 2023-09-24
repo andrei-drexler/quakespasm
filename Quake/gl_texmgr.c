@@ -361,6 +361,19 @@ void TexMgr_ApplySettings (void)
 
 /*
 ===============
+TexMgr_Imagelist_Completion_f -- tab completion for imagelist/imagedump
+===============
+*/
+static void TexMgr_Imagelist_Completion_f (const char *partial)
+{
+	gltexture_t	*glt;
+
+	for (glt = active_gltextures; glt; glt = glt->next)
+		Con_AddToTabList (glt->name, partial, NULL);
+}
+
+/*
+===============
 TexMgr_Imagelist_f -- report loaded textures
 ===============
 */
@@ -422,6 +435,7 @@ TexMgr_Imagedump_f -- dump all current textures to TGA files
 static void TexMgr_Imagedump_f (void)
 {
 	char tganame[MAX_OSPATH], tempname[MAX_OSPATH], dirname[MAX_OSPATH];
+	const char *reldirname = "imagedump";
 	const char *filter = NULL;
 	int count = 0;
 	gltexture_t	*glt;
@@ -431,7 +445,7 @@ static void TexMgr_Imagedump_f (void)
 	if (Cmd_Argc () >= 2)
 		filter = Cmd_Argv (1);
 
-	q_snprintf(dirname, sizeof(dirname), "%s/imagedump", com_gamedir);
+	q_snprintf(dirname, sizeof(dirname), "%s/%s", com_gamedir, reldirname);
 
 	glPixelStorei (GL_PACK_ALIGNMENT, 1);/* for widths that aren't a multiple of 4 */
 
@@ -475,9 +489,11 @@ static void TexMgr_Imagedump_f (void)
 	}
 
 	if (filter)
-		Con_Printf ("dumped %i textures containing '%s' to %s\n", count, filter, dirname);
+		Con_SafePrintf ("dumped %i textures containing '%s' to ", count, filter);
 	else
-		Con_Printf ("dumped %i textures to %s\n", count, dirname);
+		Con_SafePrintf ("dumped %i textures to ", count);
+	Con_LinkPrintf (va ("%s/", dirname), "%s", reldirname);
+	Con_SafePrintf (".\n");
 }
 
 /*
@@ -773,7 +789,7 @@ void TexMgr_LoadPalette (void)
 		else
 		{
 			SetColor (&d_8to24table_alphabright[i],	src[0], src[1], src[2], 255);
-			SetColor (&d_8to24table_fbright[i],		0, 0, 0, 0);
+			SetColor (&d_8to24table_fbright[i],		0, 0, 0, 255);
 			SetColor (&d_8to24table_nobright[i],	src[0], src[1], src[2], 255);
 		}
 	}
@@ -822,6 +838,7 @@ void TexMgr_Init (void)
 	static byte greytexture_data[16] = {127,127,127,255,127,127,127,255,127,127,127,255,127,127,127,255}; //50% grey
 	static byte blacktexture_data[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}; //black
 	extern texture_t *r_notexture_mip, *r_notexture_mip2;
+	cmd_function_t	*cmd;
 
 	// init texture list
 	free_gltextures = (gltexture_t *) Hunk_AllocName (MAX_GLTEXTURES * sizeof(gltexture_t), "gltextures");
@@ -849,8 +866,12 @@ void TexMgr_Init (void)
 	Cvar_RegisterVariable (&r_softemu);
 	Cvar_SetCallback (&r_softemu, TexMgr_SoftEmu_f);
 	Cmd_AddCommand ("gl_describetexturemodes", &TexMgr_DescribeTextureModes_f);
-	Cmd_AddCommand ("imagelist", &TexMgr_Imagelist_f);
-	Cmd_AddCommand ("imagedump", &TexMgr_Imagedump_f);
+	cmd = Cmd_AddCommand ("imagelist", &TexMgr_Imagelist_f);
+	if (cmd)
+		cmd->completion = TexMgr_Imagelist_Completion_f;
+	cmd = Cmd_AddCommand ("imagedump", &TexMgr_Imagedump_f);
+	if (cmd)
+		cmd->completion = TexMgr_Imagelist_Completion_f;
 
 	// poll max size from hardware
 	glGetIntegerv (GL_MAX_TEXTURE_SIZE, &gl_max_texture_size);

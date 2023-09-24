@@ -1144,7 +1144,10 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 		}
 
 		// parse value
-		data = COM_Parse (data);
+		// HACK: we allow truncation when reading the wad field,
+		// otherwise maps using lots of wads with absolute paths
+		// could cause a parse error
+		data = COM_ParseEx (data, !strcmp (keyname, "wad") ? CPE_ALLOWTRUNC : CPE_NOTRUNC);
 		if (!data)
 			Host_Error ("ED_ParseEntity: EOF without closing brace");
 
@@ -1698,9 +1701,7 @@ qboolean PR_LoadProgs (const char *filename, qboolean fatal)
 		return false;
 	Con_DPrintf ("Programs occupy %iK.\n", com_filesize/1024);
 
-	CRC_Init (&qcvm->crc);
-	for (i = 0; i < com_filesize; i++)
-		CRC_ProcessByte (&qcvm->crc, ((byte *)qcvm->progs)[i]);
+	qcvm->crc = CRC_Block (qcvm->progs, com_filesize);
 
 	// byte swap the header
 	for (i = 0; i < (int) sizeof(*qcvm->progs) / 4; i++)
@@ -2027,7 +2028,7 @@ int PR_AllocString (int size, char **ptr)
 
 void SaveData_Init (savedata_t *save)
 {
-	memset (save, 0, sizeof (save));
+	memset (save, 0, sizeof (*save));
 	save->buffersize = 48 * 1024 * 1024; // ad_sepulcher needs ~32 MB
 	save->buffer = (byte *) malloc (save->buffersize);
 	if (!save->buffer)

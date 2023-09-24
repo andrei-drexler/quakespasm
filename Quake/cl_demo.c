@@ -301,9 +301,12 @@ void CL_Record_f (void)
 
 // open the demo file
 	COM_AddExtension (relname, ".dem", sizeof(relname));
-	Con_Printf ("recording to %s.\n", relname);
-
 	q_snprintf (name, sizeof(name), "%s/%s", com_gamedir, relname);
+
+	Con_SafePrintf ("Recording to ");
+	Con_LinkPrintf (name, "%s", relname);
+	Con_SafePrintf (".\n");
+
 	cls.demofile = Sys_fopen (name, "wb");
 	if (!cls.demofile)
 	{

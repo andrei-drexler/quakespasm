@@ -55,6 +55,8 @@ extern cvar_t r_softemu;
 extern cvar_t r_waterwarp;
 extern cvar_t r_oit;
 extern cvar_t r_alphasort;
+extern cvar_t r_lerpmodels;
+extern cvar_t r_lerpmove;
 
 extern char crosshair_char;
 
@@ -2996,8 +2998,8 @@ void M_Menu_Video_f (void)
 	def (OPT_PIXELASPECT,	"UI Pixels")			\
 	def (OPT_UIMOUSE,		"UI Mouse")				\
 	def (OPT_HUDSTYLE,		"HUD")					\
-	def (OPT_SBALPHA,		"HUD alpha")			\
-	def (OPT_SCRSIZE,		"Screen Size")			\
+	def (OPT_SBALPHA,		"HUD Alpha")			\
+	def (OPT_HUDLEVEL,		"HUD Detail")			\
 	def (OPT_CROSSHAIR,		"Crosshair")			\
 													\
 	def (OPT_SPACE2,		"")						\
@@ -3033,6 +3035,7 @@ void M_Menu_Video_f (void)
 	def (VID_OPT_SCALE,			"Render Scale")		\
 	def (VID_OPT_ANISO,			"Anisotropic")		\
 	def (VID_OPT_TEXFILTER,		"Textures")			\
+	def (VID_OPT_ANIMLERP,		"Animations")		\
 	def (VID_OPT_PARTICLES,		"Particles")		\
 	def (VID_OPT_ALPHAMODE,		"Transparency")		\
 	def (VID_OPT_WATERWARP,		"Underwater FX")	\
@@ -3263,10 +3266,10 @@ void M_AdjustSliders (int dir)
 		Cvar_SetValue ("scr_sbarscale", f);
 		Cvar_SetValue ("scr_crosshairscale", f);
 		break;
-	case OPT_SCRSIZE:	// screen size
-		f = scr_viewsize.value + dir * 10;
-		if (f > 130)	f = 130;
-		else if(f < 30)	f = 30;
+	case OPT_HUDLEVEL:	// hud detail
+		f = scr_viewsize.value - dir * 10;
+		if (f > 130)		f = 130;
+		else if(f < 100)	f = 100;
 		Cvar_SetValue ("viewsize", f);
 		break;
 	case OPT_PIXELASPECT:	// 2D pixel aspect ratio
@@ -3428,6 +3431,10 @@ void M_AdjustSliders (int dir)
 	case VID_OPT_TEXFILTER:
 		VID_Menu_ChooseNextTexFilter ();
 		break;
+	case VID_OPT_ANIMLERP:
+		Cvar_SetValueQuick (&r_lerpmodels, !r_lerpmove.value);
+		Cvar_SetValueQuick (&r_lerpmove, !r_lerpmove.value);
+		break;
 	case VID_OPT_PARTICLES:
 		Cvar_SetValueQuick (&r_particles, (int)(q_max (r_particles.value, 0.f) + 3 + dir) % 3);
 		break;
@@ -3498,8 +3505,9 @@ qboolean M_SetSliderValue (int option, float f)
 			M_Options_UpdateLayout ();
 		}
 		return true;
-	case OPT_SCRSIZE:	// screen size
-		f = f * (130 - 30) + 30;
+	case OPT_HUDLEVEL:	// hud detail
+		f = 1 - f;
+		f = f * (130 - 100) + 100;
 		if (f >= 100)
 			f = floor (f / 10 + 0.5) * 10;
 		Cvar_SetValue ("viewsize", f);
@@ -3608,8 +3616,9 @@ static void M_Options_DrawItem (int y, int item)
 		M_DrawSlider (x, y, r);
 		break;
 
-	case OPT_SCRSIZE:
-		r = (scr_viewsize.value - 30) / (130 - 30);
+	case OPT_HUDLEVEL:
+		r = (scr_viewsize.value - 100) / (130 - 100);
+		r = 1 - r;
 		M_DrawSlider (x, y, r);
 		break;
 
@@ -3768,6 +3777,9 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 	case VID_OPT_TEXFILTER:
 		M_Print (x, y, VID_Menu_GetTexFilterDesc ());
+		break;
+	case VID_OPT_ANIMLERP:
+		M_Print (x, y, r_lerpmodels.value ? "Smooth" : "Classic");
 		break;
 	case VID_OPT_PARTICLES:
 		M_Print (x, y, VID_Menu_GetParticlesDesc ());
@@ -3996,8 +4008,6 @@ static const char* const bindnames[][2] =
 	{"+lookup",			"Look up"},
 	{"+lookdown",		"Look down"},
 	{"centerview",		"Center view"},
-	{"+mlook",			"Mouse look"},
-	{"+klook",			"Keyboard look"},
 	{"zoom_in",			"Toggle zoom"},
 	{"+zoom",			"Quick zoom"},
 	{"",				""},
@@ -6273,7 +6283,7 @@ void M_Mousemove (int x, int y)
 	drawtransform_t transform;
 	float px, py;
 
-	if (!ui_mouse.value)
+	if (bind_grab || !ui_mouse.value)
 		return;
 
 	Draw_GetCanvasTransform (CANVAS_MENU, &transform);

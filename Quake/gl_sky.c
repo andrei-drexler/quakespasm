@@ -281,7 +281,9 @@ static void Sky_SaveWind_f (void)
 
 	fclose (f);
 
-	Con_Printf ("Wrote '%s'.\n", relname);
+	Con_SafePrintf ("Wrote ");
+	Con_LinkPrintf (path, "%s", relname);
+	Con_SafePrintf ("\n");
 }
 
 /*
@@ -328,6 +330,24 @@ static void Sky_WindCommand_f (void)
 	if (!q_strcasecmp (Cmd_Argv (1), "load"))
 	{
 		Sky_LoadWind_f ();
+		return;
+	}
+
+	if (!q_strcasecmp (Cmd_Argv (1), "setview"))
+	{
+		skybox->wind_yaw = cl.viewangles[YAW];
+		skybox->wind_pitch = cl.viewangles[PITCH];
+
+		if (Cmd_Argc () >= 3)
+			skybox->wind_period = atof (Cmd_Argv (2));
+		else if (!skybox->wind_period)
+			skybox->wind_period = 30.f;
+
+		if (Cmd_Argc () >= 4)
+			skybox->wind_dist = CLAMP (-2.0, atof (Cmd_Argv (3)), 2.0);
+		else if (!skybox->wind_dist)
+			skybox->wind_dist = 1.f;
+
 		return;
 	}
 
@@ -539,7 +559,7 @@ void Sky_NewMap (void)
 			q_strlcpy(key, com_token, sizeof(key));
 		while (key[0] && key[strlen(key)-1] == ' ') // remove trailing spaces
 			key[strlen(key)-1] = 0;
-		data = COM_Parse(data);
+		data = COM_ParseEx(data, CPE_ALLOWTRUNC);
 		if (!data)
 			return; // error
 		q_strlcpy(value, com_token, sizeof(value));
@@ -755,7 +775,7 @@ Sky_IsAnimated
 */
 qboolean Sky_IsAnimated (void)
 {
-	return r_skywind.value != 0.f && skybox && skybox->wind_dist > 0.f;
+	return r_skywind.value != 0.f && skybox && skybox->wind_dist != 0.f;
 }
 
 /*
