@@ -817,10 +817,10 @@ void Sbar_DrawInventoryQW (void)
 
 	// draw weapons, ammo, sigils on right side if full hud
 	if(scr_viewsize.value < 110)
-    {
-    	int extraguns = 2 * hipnotic;
+	{
+		int extraguns = 2 * hipnotic;
 
-    	GL_SetCanvas (CANVAS_SBAR_QW_INV);
+		GL_SetCanvas (CANVAS_SBAR_QW_INV);
 
 		// weapons
 		for (i = 0; i < 7; i++)
@@ -974,9 +974,9 @@ void Sbar_DrawInventoryQW (void)
 				}
 			}
 		}
-    }
+	}
 
-    // draw items/powerups with main hud
+	// draw items/powerups with main hud
 	GL_SetCanvas (CANVAS_SBAR);
 
 	flashon = 0;
