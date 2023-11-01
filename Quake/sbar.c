@@ -807,10 +807,10 @@ void Sbar_DrawInventoryQW (void)
 	pic = Sbar_InventoryBarPic();
 
 	// handle sigil overlap w/ side scoreboard
-	if (Sbar_MiniScoreboardSizeCheck())
+	if (cl.gametype == GAME_DEATHMATCH && Sbar_MiniScoreboardSizeCheck() )
 	{
 		if (rogue || hipnotic)
-			scoreboard_y_gap = 8; // no sigils so can move weps down a bit
+			scoreboard_y_gap = 0; // no sigils so can move weps down a bit
 		else
 			scoreboard_y_gap = 24;
 	}
