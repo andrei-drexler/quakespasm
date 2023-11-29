@@ -64,6 +64,9 @@ extern char crosshair_char;
 
 extern qboolean quake64;
 
+extern void StartCalibration(void);
+extern qboolean IsCalibrationZero(void);
+
 enum m_state_e m_state;
 extern qboolean	keydown[256];
 int m_mousex, m_mousey;
@@ -3038,6 +3041,30 @@ static void GYRO_Menu_ToggleTurningAxis (int dir)
 	Cvar_SetValueQuick (&gyro_turning_axis, i);
 }
 
+/*
+================
+GYRO_Menu_Calibration
+
+starts gyro calibration
+================
+*/
+static void GYRO_Menu_Calibration(int dir)
+{
+	Con_Printf("Calibrating, please wait...");
+	StartCalibration();
+}
+
+/*
+================
+CalibrationFinishedCallback
+
+called from in_sdl once calibration is finished
+================
+*/
+void CalibrationFinishedCallback(void)
+{
+	Con_Printf("Calibration finished");
+}
 
 /*
 ================
@@ -3558,6 +3585,9 @@ void M_AdjustSliders (int dir)
 		break;
 	case GYRO_OPT_SENSY:
 		Cvar_SetValueQuick (&gyro_pitchsensitivity, CLAMP (MIN_GYRO_SENS, gyro_pitchsensitivity.value + dir * .1f, MAX_GYRO_SENS));
+		break;
+	case GYRO_OPT_CALIBRATE:
+		GYRO_Menu_Calibration(-dir);
 		break;
 
 	default:

@@ -93,7 +93,14 @@ static int	total_dx, total_dy = 0;
 static float gyro_yaw, gyro_pitch = 0;
 static float gyro_dir = 1;
 
-static qboolean gyro_active = true;
+// used for gyro calibration
+static float gyro_accum[3];
+static unsigned int num_samples;
+static unsigned int updates_countdown = 0;
+
+extern void CalibrationFinishedCallback(void);
+
+static qboolean gyro_active = false;
 
 static int SDLCALL IN_FilterMouseEvents (const SDL_Event *event)
 {
@@ -425,6 +432,11 @@ void IN_Init (void)
 	IN_Activate();
 	IN_StartupJoystick();
 	Sys_ActivateKeyFilter(true);
+
+	if ((int)gyro_mode.value == 2)
+	{
+		gyro_active = true;
+	}
 }
 
 void IN_Shutdown (void)
@@ -973,6 +985,21 @@ static void IN_DebugKeyEvent(SDL_Event *event)
 		Sys_DoubleTime());
 }
 
+void StartCalibration(void)
+{
+	gyro_accum[0] = 0.0;
+	gyro_accum[1] = 0.0;
+	gyro_accum[2] = 0.0;
+
+	num_samples = 0;
+	updates_countdown = 300;
+}
+
+qboolean IsCalibrationZero(void)
+{
+	return (!gyro_calibration_x.value && !gyro_calibration_y.value && !gyro_calibration_z.value);
+}
+
 void IN_SendKeyEvents (void)
 {
 	SDL_Event event;
@@ -1061,10 +1088,18 @@ void IN_SendKeyEvents (void)
 			IN_MouseMotion(event.motion.xrel, event.motion.yrel);
 			break;
 
-# if SDL_VERSION_ATLEAST(2, 0, 14)
+#if SDL_VERSION_ATLEAST(2, 0, 14)
 		case SDL_CONTROLLERSENSORUPDATE:
 			if (event.csensor.sensor != SDL_SENSOR_GYRO)
 			{
+				break;
+			}
+			if (updates_countdown)
+			{
+				gyro_accum[0] += event.csensor.data[0];
+				gyro_accum[1] += event.csensor.data[1];
+				gyro_accum[2] += event.csensor.data[2];
+				num_samples++;
 				break;
 			}
 			if (gyro_active && gyro_mode.value)
@@ -1135,6 +1170,24 @@ void IN_SendKeyEvents (void)
 
 		default:
 			break;
+		}
+	}
+
+	if (updates_countdown)
+	{
+		updates_countdown--;
+		if (!updates_countdown)
+		{
+			const float inverseSamples = 1.f / num_samples;
+			Cvar_SetValue("gyro_calibration_x", gyro_accum[0] * inverseSamples);
+			Cvar_SetValue("gyro_calibration_y", gyro_accum[1] * inverseSamples);
+			Cvar_SetValue("gyro_calibration_z", gyro_accum[2] * inverseSamples);
+
+			Con_Printf("Calibration results:\n X=%f Y=%f Z=%f\n",
+					   gyro_calibration_x.value,
+					   gyro_calibration_y.value,
+					   gyro_calibration_z.value);
+			CalibrationFinishedCallback();
 		}
 	}
 }
