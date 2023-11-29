@@ -57,10 +57,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	IRONWAIL_VER_STRING		QS_STRINGIFY(IRONWAIL_VER_MAJOR) "." QS_STRINGIFY(IRONWAIL_VER_MINOR) "." QS_STRINGIFY(IRONWAIL_VER_PATCH) IRONWAIL_VER_SUFFIX
 
 #define CONSOLE_TITLE_STRING	"Ironwail " IRONWAIL_VER_STRING
-#define WINDOW_TITLE_STRING		"Quake/Ironwail " IRONWAIL_VER_STRING
-#define CONFIG_NAME				"ironwail.cfg"
-#define SCREENSHOT_PREFIX		"ironwail"
-#define ENGINE_PAK				"ironwail.pak"
+#define WINDOW_TITLE_STRING	  "Quake/Ironwail " IRONWAIL_VER_STRING
+#define CONFIG_NAME				    "ironwail.cfg"
+#define SCREENSHOT_PREFIX		  "ironwail"
+#if defined(__unix)
+#define ENGINE_PATH_UNIX      "/usr/local/share"
+#define ENGINE_PAK				    ENGINE_PATH_UNIX "/ironwail/ironwail.pak"
+#else
+#define ENFINE_PAK            "ironwail.pak"
+#endif
 #define ENGINE_USERDIR_WIN		"Ironwail"
 #define ENGINE_USERDIR_OSX		"Ironwail"
 #define ENGINE_USERDIR_UNIX		".ironwail"

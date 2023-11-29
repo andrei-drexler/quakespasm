@@ -297,7 +297,7 @@ OBJS += $(SYSOBJ_RES)
 # targets / rules
 # ---------------------------
 
-.PHONY:	clean debug release
+.PHONY:	clean debug release uninstall
 
 DEFAULT_TARGET := ironwail
 all: $(DEFAULT_TARGET)
@@ -322,8 +322,15 @@ clean: $(MAKEFILE)
 	$(RM) *.o *.d $(DEFAULT_TARGET)
 
 install:	ironwail
-	cp ironwail /usr/local/games/quake
-	cp ironwail.pak /usr/local/games/quake
+	mkdir -p /usr/local/games/quake/
+	mkdir -p /usr/local/share/ironwail
+	cp ironwail /usr/local/games/ironwail
+	cp ironwail.pak /usr/local/share/ironwail/ironwail.pak
+
+uninstall:
+	rm /usr/local/games/quake/ironwail.pak
+	rmdir /usr/local/games/quake
+	rm /usr/local/games/ironwail
 
 #---------------------------------------------------------------
 # include dependencies (if not running 'clean' target)
