@@ -1098,6 +1098,11 @@ void IN_SendKeyEvents (void)
 					SDL_Joystick *joy;
 					joy = SDL_GameControllerGetJoystick(joy_active_controller);
 					joy_active_instaceid = SDL_JoystickInstanceID(joy);
+					if (SDL_GameControllerHasLED(joy_active_controller))
+						{
+							// orange LED, seemed fitting for Quake
+							SDL_GameControllerSetLED(joy_active_controller, 80, 20, 0);
+						}
 				}
 			}
 			else
