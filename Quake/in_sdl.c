@@ -67,8 +67,8 @@ cvar_t	joy_enable = { "joy_enable", "1", CVAR_ARCHIVE };
 cvar_t gyro_mode = {"gyro_mode", "0", CVAR_ARCHIVE};
 cvar_t gyro_turning_axis = {"gyro_turning_axis", "0", CVAR_ARCHIVE};
 
-cvar_t gyro_yawsensitivity = {"gyro_yawsensitivity", "1", CVAR_ARCHIVE};
-cvar_t gyro_pitchsensitivity= {"gyro_pitchsensitivity", "1", CVAR_ARCHIVE};
+cvar_t gyro_yawsensitivity = {"gyro_yawsensitivity", "2.5", CVAR_ARCHIVE};
+cvar_t gyro_pitchsensitivity= {"gyro_pitchsensitivity", "2.5", CVAR_ARCHIVE};
 
 cvar_t gyro_calibration_x = {"gyro_calibration_x", "0", CVAR_ARCHIVE};
 cvar_t gyro_calibration_y = {"gyro_calibration_y", "0", CVAR_ARCHIVE};
