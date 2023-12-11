@@ -4219,7 +4219,7 @@ static const char* const bindnames[][2] =
 	{"centerview",		"Center view"},
 	{"zoom_in",			"Toggle zoom"},
 	{"+zoom",			"Quick zoom"},
-	{"+gyroaction",		"Gyro Action"},
+	{"+gyroaction",		"Gyro Off / On"},
 	{"",				""},
 	{"+attack",			"Attack"},
 	{"impulse 10",		"Next weapon"},
