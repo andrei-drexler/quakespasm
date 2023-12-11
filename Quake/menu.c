@@ -3187,8 +3187,8 @@ void M_Menu_Gyro_f (void)
 													\
 	def(GYRO_OPT_SPACE1,		"")					\
 													\
-	def(GYRO_OPT_SENSX,			"Yaw Sensitivity")	\
-	def(GYRO_OPT_SENSY,			"Pitch Sensitivity")\
+	def(GYRO_OPT_SENSX,			"Yaw Speed")	\
+	def(GYRO_OPT_SENSY,			"Pitch Speed")\
 													\
 	def(GYRO_OPT_SPACE2,		"")					\
 													\
