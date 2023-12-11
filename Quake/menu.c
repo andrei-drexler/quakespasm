@@ -2991,6 +2991,59 @@ void M_Menu_Video_f (void)
 }
 
 //=============================================================================
+/* CALIBRATION SCREEN */
+
+qboolean calibrationComplete;
+double calibrationCompleteTime;
+
+void M_Menu_Calibration_f (void)
+{
+	IN_DeactivateForMenu();
+	m_state = m_calibration;
+	calibrationComplete = false;
+	Con_Printf("Calibrating, please wait...");
+	StartCalibration();
+}
+
+void M_Calibration_Draw (void)
+{
+	int x;
+	x = (320-27*8)/2;
+	M_DrawTextBox (x, 108, 27, 1);
+
+	if (! calibrationComplete)
+	{
+		x += 16;
+		M_Print (x, 116, "Calibrating, please wait...");
+	}
+	else
+	{
+		x += 32;
+		M_Print (x, 116, "Calibration Complete!");
+		if ((realtime - calibrationCompleteTime) > 2.0)
+			m_state = m_gyro;
+	}
+}
+
+void M_Calibration_Key (int key)
+{
+}
+
+/*
+================
+CalibrationFinishedCallback
+
+called from in_sdl once calibration is finished
+================
+*/
+void CalibrationFinishedCallback(void)
+{
+	Con_Printf("Calibration finished");
+	calibrationComplete = true;
+	calibrationCompleteTime = realtime;
+}
+
+//=============================================================================
 /* GYRO MENU */
 
 #define MIN_GYRO_SENS 0.1
@@ -3050,20 +3103,7 @@ starts gyro calibration
 */
 static void GYRO_Menu_Calibration(int dir)
 {
-	Con_Printf("Calibrating, please wait...");
-	StartCalibration();
-}
-
-/*
-================
-CalibrationFinishedCallback
-
-called from in_sdl once calibration is finished
-================
-*/
-void CalibrationFinishedCallback(void)
-{
-	Con_Printf("Calibration finished");
+	M_Menu_Calibration_f();
 }
 
 /*
@@ -4013,6 +4053,14 @@ void M_Options_Draw (void)
 
 		y += 8;
 	}
+
+	if (m_state == m_gyro)
+	{
+		M_Print (x, y, "To calibrate, place the controller");
+		y += 8;
+		M_Print (x, y, "on a flat, stable surface");
+	}
+
 }
 
 void M_Options_Key (int k)
@@ -6281,6 +6329,10 @@ void M_Draw (void)
 		M_Net_Draw ();
 		break;
 
+	case m_calibration:
+		M_Calibration_Draw ();
+		break;
+
 	case m_options:
 	case m_video:
 	case m_gyro:
@@ -6385,6 +6437,10 @@ void M_Keydown (int key)
 	case m_net:
 		M_Net_Key (key);
 		return;
+
+	case m_calibration:
+		M_Calibration_Key (key);
+		break;
 
 	case m_options:
 	case m_video:

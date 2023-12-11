@@ -37,6 +37,7 @@ enum m_state_e {
 	m_options,
 	m_video,
 	m_keys,
+	m_calibration,
 	m_gyro,
 	m_mods,
 	m_modinfo,
