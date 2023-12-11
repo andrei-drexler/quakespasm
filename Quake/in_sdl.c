@@ -749,6 +749,18 @@ void IN_JoyMove (usercmd_t *cmd)
 
 void IN_GyroMove(usercmd_t *cmd)
 {
+	if (!joy_enable.value)
+		return;
+
+	if (!joy_active_controller)
+		return;
+
+	if (cl.paused || key_dest != key_game)
+		return;
+
+	if (CL_InCutscene ())
+		return;
+
 	float gyroViewFactor = (1.0f / M_PI) * host_frametime/0.01666f;
 
 	if (gyro_yaw)
