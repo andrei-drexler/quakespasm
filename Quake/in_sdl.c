@@ -358,7 +358,8 @@ void IN_ShutdownJoystick (void)
 	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 }
 
-void IN_GyroActionDown (void) {
+void IN_GyroActionDown (void)
+{
 	switch ((int)gyro_mode.value)
 	{
 		case 1:
@@ -366,11 +367,13 @@ void IN_GyroActionDown (void) {
 			return;
 		case 2:
 			gyro_active = false;
+			return;
 		case 4:
 			gyro_dir = -1;
 	}
 }
-void IN_GyroActionUp (void) {
+void IN_GyroActionUp (void)
+{
 	switch ((int)gyro_mode.value)
 	{
 		case 1:
@@ -378,8 +381,24 @@ void IN_GyroActionUp (void) {
 			return;
 		case 2:
 			gyro_active = true;
+			return;
 		case 4:
 			gyro_dir = 1;
+	}
+}
+
+void IN_UpdateGyroActive(void)
+{
+	switch ((int)gyro_mode.value)
+	{
+		case 0:
+		case 1:
+			gyro_active = false;
+			return;
+		case 2:
+		case 3:
+		case 4:
+			gyro_active = true;
 	}
 }
 
