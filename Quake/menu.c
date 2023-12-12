@@ -66,7 +66,6 @@ extern qboolean quake64;
 
 extern void StartCalibration(void);
 extern qboolean IsCalibrationZero(void);
-extern void IN_UpdateGyroActive(void);
 
 enum m_state_e m_state;
 extern qboolean	keydown[256];
@@ -3074,7 +3073,6 @@ static void GYRO_Menu_ChooseNextMode (int dir)
 		i = 0;
 
 	Cvar_SetValueQuick (&gyro_mode, i);
-	IN_UpdateGyroActive();
 }
 
 /*

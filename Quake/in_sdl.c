@@ -387,9 +387,9 @@ void IN_GyroActionUp (void)
 	}
 }
 
-void IN_UpdateGyroActive(void)
+void IN_UpdateGyroActive(cvar_t *var)
 {
-	switch ((int)gyro_mode.value)
+	switch ((int)var->value)
 	{
 		case 0:
 		case 1:
@@ -436,6 +436,7 @@ void IN_Init (void)
 	Cvar_RegisterVariable(&joy_enable);
 
 	Cvar_RegisterVariable(&gyro_mode);
+	Cvar_SetCallback(&gyro_mode, IN_UpdateGyroActive);
 	Cvar_RegisterVariable(&gyro_turning_axis);
 
 	Cvar_RegisterVariable(&gyro_yawsensitivity);
