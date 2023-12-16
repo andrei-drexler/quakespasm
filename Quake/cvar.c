@@ -585,7 +585,7 @@ cvar_t *Cvar_Create (const char *name, const char *value)
 	if (Cmd_Exists (name))
 		return NULL;	//error! panic! oh noes!
 
-	newvar = Z_Malloc(sizeof(cvar_t) + strlen(name)+1);
+	newvar = (cvar_t*) Z_Malloc(sizeof(cvar_t) + strlen(name)+1);
 	newvar->name = (char*)(newvar+1);
 	strcpy((char*)(newvar+1), name);
 	newvar->flags = CVAR_USERDEFINED;

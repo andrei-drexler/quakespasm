@@ -746,7 +746,7 @@ static void GL_AllocFrameResources (frameres_bits_t bits)
 			if (gl_buffer_storage_able)
 			{
 				GL_BufferStorageFunc (GL_ARRAY_BUFFER, frameres_host_buffer_size, NULL, flags);
-				frame->host_ptr = GL_MapBufferRangeFunc (GL_ARRAY_BUFFER, 0, frameres_host_buffer_size, flags);
+				frame->host_ptr = (GLubyte *) GL_MapBufferRangeFunc (GL_ARRAY_BUFFER, 0, frameres_host_buffer_size, flags);
 				if (!frame->host_ptr)
 					Sys_Error ("GL_AllocFrameResources: MapBufferRange failed on %" SDL_PRIu64 " bytes", (uint64_t)frameres_host_buffer_size);
 			}

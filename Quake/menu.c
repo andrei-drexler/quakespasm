@@ -1717,7 +1717,7 @@ static void M_Maps_Init (void)
 		if (type >= MAPTYPE_BMODEL)
 			continue;
 		if (prev_type != -1 && prev_type != type)
-			M_Maps_AddSeparator (prev_type, type);
+			M_Maps_AddSeparator ((maptype_t)prev_type, (maptype_t)type);
 		prev_type = type;
 
 		map.name = item->name;
@@ -1726,7 +1726,7 @@ static void M_Maps_Init (void)
 		map.mapidx = mapsmenu.mapcount++;
 		if (map.active && active == -1)
 			active = VEC_SIZE (mapsmenu.items);
-		if ((map.active && !cls.demoplayback) || (mapsmenu.list.cursor == -1 && ExtraMaps_IsStart (type)))
+		if ((map.active && !cls.demoplayback) || (mapsmenu.list.cursor == -1 && ExtraMaps_IsStart ((maptype_t)type)))
 			mapsmenu.list.cursor = VEC_SIZE (mapsmenu.items);
 		VEC_PUSH (mapsmenu.items, map);
 		mapsmenu.list.numitems++;
@@ -2715,7 +2715,7 @@ chooses next window mode in order, then updates vid_fullscreen and vid_borderles
 static void VID_Menu_ChooseNextDisplayMode (int dir)
 {
 	windowmode_t mode = VID_Menu_GetDisplayMode ();
-	mode = (mode + DISPLAYMODE_COUNT - dir) % DISPLAYMODE_COUNT;
+	mode = (windowmode_t)((mode + DISPLAYMODE_COUNT - dir) % DISPLAYMODE_COUNT);
 	VID_Menu_SetDisplayMode (mode);
 }
 
@@ -3275,7 +3275,7 @@ void M_AdjustSliders (int dir)
 		Cvar_SetValueQuick (&crosshair, ((int) q_max (crosshair.value, 0.f) + 3 + dir) % 3);
 		break;
 	case OPT_UIMOUSE:	// UI mouse support
-		M_Options_SetUIMouse ((M_Options_GetUIMouse () + UI_MOUSE_NUMSETTINGS + dir) % UI_MOUSE_NUMSETTINGS);
+		M_Options_SetUIMouse ((uimouse_t)((M_Options_GetUIMouse () + UI_MOUSE_NUMSETTINGS + dir) % UI_MOUSE_NUMSETTINGS));
 		break;
 	case OPT_GAMMA:	// gamma
 		f = vid_gamma.value - dir * 0.05;

@@ -448,7 +448,7 @@ void Sky_LoadSkyBox (const char *name)
 		const int cubemap_order[6] = {3, 1, 4, 5, 0, 2}; // ft/bk/up/dn/rt/lf
 		size_t numfacebytes = samesize * samesize * 4;
 
-		newsky.cubemap_pixels = malloc (numfacebytes * 6);
+		newsky.cubemap_pixels = (byte *) malloc (numfacebytes * 6);
 		if (!newsky.cubemap_pixels)
 		{
 			Con_Warning ("Sky_LoadSkyBox: out of memory on %" SDL_PRIu64 " bytes\n", (uint64_t) numfacebytes);

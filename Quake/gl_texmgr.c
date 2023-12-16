@@ -289,8 +289,8 @@ TexMgr_SoftEmu_f -- called when r_softemu changes
 */
 static void TexMgr_SoftEmu_f (cvar_t *var)
 {
-	softemu = (int)r_softemu.value;
-	softemu = CLAMP (0, (int)softemu, SOFTEMU_NUMMODES - 1);
+	softemu = (softemu_t)r_softemu.value;
+	softemu = (softemu_t)CLAMP (0, softemu, SOFTEMU_NUMMODES - 1);
 }
 
 /*
@@ -2070,8 +2070,8 @@ void GLPalette_UpdateLookupTable (void)
 	}
 	else
 	{
-		metric = (int)r_softemu_metric.value;
-		metric = CLAMP (0, (int)metric, SOFTEMU_METRIC_COUNT - 1);
+		metric = (softemu_metric_t)r_softemu_metric.value;
+		metric = (softemu_metric_t)CLAMP (0, (int)metric, SOFTEMU_METRIC_COUNT - 1);
 	}
 
 	SDL_assert ((unsigned)metric < SOFTEMU_METRIC_COUNT);

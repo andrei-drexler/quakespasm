@@ -381,7 +381,7 @@ static qboolean Sys_GetKnownFolder (const KNOWNFOLDERID *base, const char *subdi
 	if (FAILED (hr))
 		return false;
 
-	hr = SHGetKnownFolderPath (base, 0, NULL, &wpath);
+	hr = SHGetKnownFolderPath ((REFKNOWNFOLDERID)base, 0, NULL, &wpath);
 	if (FAILED (hr))
 	{
 		CoUninitialize ();
@@ -619,9 +619,9 @@ typedef struct winfindfile_s {
 static void Sys_FillFindData (winfindfile_t *find)
 {
 	WideStringToUTF8 (find->data.cFileName, find->base.name, countof (find->base.name));
-	find->base.attribs = 0;
+	find->base.attribs = (fileattribs_t)0;
 	if (find->data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-		find->base.attribs |= FA_DIRECTORY;
+		find->base.attribs = (fileattribs_t)(find->base.attribs | FA_DIRECTORY);
 }
 
 findfile_t *Sys_FindFirst (const char *dir, const char *ext)

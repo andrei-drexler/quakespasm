@@ -865,7 +865,7 @@ void NET_Shutdown (void)
 //
 	for (net_driverlevel = 0; net_driverlevel < net_numdrivers; net_driverlevel++)
 	{
-		if (net_drivers[net_driverlevel].initialized == true)
+		if (net_drivers[net_driverlevel].initialized == (qboolean)true)
 		{
 			net_drivers[net_driverlevel].Shutdown ();
 			net_drivers[net_driverlevel].initialized = false;

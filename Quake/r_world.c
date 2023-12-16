@@ -379,32 +379,32 @@ static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass
 	{
 	default:
 	case BP_SOLID:
-		texbegin = 0;
+		texbegin = (textype_t)0;
 		texend = TEXTYPE_CUTOUT;
 		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_SOLID];
 		break;
 	case BP_ALPHATEST:
 		texbegin = TEXTYPE_CUTOUT;
-		texend = TEXTYPE_CUTOUT + 1;
+		texend = (textype_t)(TEXTYPE_CUTOUT + 1);
 		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_ALPHATEST];
 		break;
 	case BP_SKYLAYERS:
 		texbegin = TEXTYPE_SKY;
-		texend = TEXTYPE_SKY + 1;
+		texend = (textype_t)(TEXTYPE_SKY + 1);
 		program = glprogs.skylayers[softemu == SOFTEMU_COARSE];
 		break;
 	case BP_SKYCUBEMAP:
 		texbegin = TEXTYPE_SKY;
-		texend = TEXTYPE_SKY + 1;
+		texend = (textype_t)(TEXTYPE_SKY + 1);
 		program = glprogs.skycubemap[Sky_IsAnimated ()][softemu == SOFTEMU_COARSE];
 		break;
 	case BP_SKYSTENCIL:
 		texbegin = TEXTYPE_SKY;
-		texend = TEXTYPE_SKY + 1;
+		texend = (textype_t)(TEXTYPE_SKY + 1);
 		program = glprogs.skystencil;
 		break;
 	case BP_SHOWTRIS:
-		texbegin = 0;
+		texbegin = (textype_t)0;
 		texend = TEXTYPE_COUNT;
 		program = glprogs.world[0][0][0];
 		break;

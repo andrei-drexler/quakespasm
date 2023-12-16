@@ -34,6 +34,14 @@ typedef struct
 	qboolean	changelevel_issued;	// cleared when at SV_SpawnServer
 } server_static_t;
 
+typedef struct
+{
+	int idx;
+	int type;
+	int fld;
+	eval_t* ptr;
+} svcustomstat_t;
+
 //=============================================================================
 
 #define MAX_SIGNON_BUFFERS 256
@@ -75,13 +83,7 @@ typedef struct
 	unsigned	protocol; //johnfitz
 	unsigned	protocolflags;
 
-	struct svcustomstat_s
-	{
-		int idx;
-		int type;
-		int fld;
-		eval_t *ptr;
-	} customstats[MAX_CL_STATS*2];	//strings or numeric...
+	svcustomstat_t customstats[MAX_CL_STATS*2];	//strings or numeric...
 	size_t		numcustomstats;
 
 	char		lastsave[MAX_OSPATH];
@@ -103,18 +105,19 @@ typedef struct
 
 #define	NUM_PING_TIMES		16
 
+typedef enum {
+	PRESPAWN_DONE,
+	PRESPAWN_FLUSH = 1,
+	PRESPAWN_SIGNONBUFS,
+	PRESPAWN_SIGNONMSG,
+} sendsignon_t;
+
 typedef struct client_s
 {
 	qboolean		active;				// false = client is free
 	qboolean		spawned;			// false = don't send datagrams
 	qboolean		dropasap;			// has been told to go to another level
-	enum
-	{
-		PRESPAWN_DONE,
-		PRESPAWN_FLUSH=1,
-		PRESPAWN_SIGNONBUFS,
-		PRESPAWN_SIGNONMSG,
-	}				sendsignon;			// only valid before spawned
+	sendsignon_t	sendsignon;			// only valid before spawned
 	int				signonidx;
 
 	double			last_message;		// reliable messages must be sent

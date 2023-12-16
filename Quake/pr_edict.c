@@ -985,14 +985,14 @@ static void ED_RezoneString (string_t *ref, const char *str)
 //			Con_Warning("ED_RezoneString: string wasn't strzoned\n");	//warnings would trigger from the default cvar value that autocvars are initialised with
 	}
 
-	buf = Z_Malloc(len);
+	buf = (char *)Z_Malloc(len);
 	memcpy(buf, str, len);
 	id = -1-(*ref = PR_SetEngineString(buf));
 	//make sure its flagged as zoned so we can clean up properly after.
 	if (id >= qcvm->knownzonesize)
 	{
 		qcvm->knownzonesize = (id+32)&~7;
-		qcvm->knownzone = Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
+		qcvm->knownzone = (unsigned char *)Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
 	}
 	qcvm->knownzone[id>>3] |= 1u<<(id&7);
 }
@@ -1381,7 +1381,7 @@ static func_t PR_FindExtFunction(const char *entryname)
 	return 0;
 }
 
-static void *PR_FindExtGlobal(int type, const char *name)
+static float *PR_FindExtGlobal(int type, const char *name)
 {
 	ddef_t *def = ED_FindGlobal(name);
 	if (def && (def->type&~DEF_SAVEGLOBAL) == type && def->ofs < qcvm->progs->numglobals)
@@ -1532,7 +1532,7 @@ static void PR_MergeEngineFieldDefs (void)
 	if (maxdefs != qcvm->progs->numfielddefs)
 	{	//we now know how many entries we need to add...
 		ddef_t *olddefs = qcvm->fielddefs;
-		qcvm->fielddefs = malloc(maxdefs * sizeof(*qcvm->fielddefs));
+		qcvm->fielddefs = (ddef_t *)malloc(maxdefs * sizeof(*qcvm->fielddefs));
 		memcpy(qcvm->fielddefs, olddefs, qcvm->progs->numfielddefs*sizeof(*qcvm->fielddefs));
 		if (olddefs != (ddef_t *)((byte *)qcvm->progs + qcvm->progs->ofs_fielddefs))
 			free(olddefs);

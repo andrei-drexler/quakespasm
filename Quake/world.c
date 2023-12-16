@@ -340,7 +340,7 @@ void SV_TouchLinks (edict_t *ent)
 	int		old_self, old_other;
 	int		i, listcount;
 
-	list = alloca (qcvm->num_edicts*sizeof(edict_t *));
+	list = (edict_t **)(alloca (qcvm->num_edicts*sizeof(edict_t *)));
 
 	listcount = 0;
 	SV_AreaTriggerEdicts (ent, sv_areanodes, list, &listcount, qcvm->num_edicts);

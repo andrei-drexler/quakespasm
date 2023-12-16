@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 #include "q_ctype.h"
+#include "server.h"
 
 #define	STRINGTEMP_BUFFERS		1024
 #define	STRINGTEMP_LENGTH		1024
@@ -2056,8 +2057,7 @@ static void PF_cl_playerkey_f(void)
 	PF_cl_playerkey_internal(playernum, keyname, true);
 }
 
-
-static struct
+static struct qcpics_t
 {
 	char name[MAX_QPATH];
 	unsigned int flags;
@@ -2104,7 +2104,7 @@ static qpic_t *DrawQC_CachePic(const char *picname, unsigned int flags)
 	if (i+1 > maxqcpics)
 	{
 		maxqcpics = i + 32;
-		qcpics = realloc(qcpics, maxqcpics * sizeof(*qcpics));
+		qcpics = (struct qcpics_t*)realloc(qcpics, maxqcpics * sizeof(*qcpics));
 	}
 
 	strcpy(qcpics[i].name, picname);
@@ -2540,13 +2540,13 @@ static void PF_strzone(void)
 	}
 	len++; /*for the null*/
 
-	buf = Z_Malloc(len);
+	buf = (char*)Z_Malloc(len);
 	G_INT(OFS_RETURN) = PR_SetEngineString(buf);
 	id = -1-G_INT(OFS_RETURN);
 	if (id >= qcvm->knownzonesize)
 	{
 		qcvm->knownzonesize = (id+32)&~7;
-		qcvm->knownzone = Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
+		qcvm->knownzone = (unsigned char *)Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
 	}
 	qcvm->knownzone[id>>3] |= 1u<<(id&7);
 
@@ -3237,7 +3237,7 @@ static void PF_tokenizebyseparator(void)
 		if (found)
 		{
 			tlen = qctoken[qctoken_count].end - qctoken[qctoken_count].start;
-			qctoken[qctoken_count].token = malloc(tlen + 1);
+			qctoken[qctoken_count].token = (char*)malloc(tlen + 1);
 			memcpy(qctoken[qctoken_count].token, start + qctoken[qctoken_count].start, tlen);
 			qctoken[qctoken_count].token[tlen] = 0;
 
@@ -3401,7 +3401,7 @@ static void PF_cl_registercommand(void)
 	Cmd_AddCommand(cmdname, NULL);
 }
 
-static struct svcustomstat_s *PR_CustomStat(int idx, int type)
+static svcustomstat_t *PR_CustomStat(int idx, int type)
 {
 	size_t i;
 	if (idx < 0 || idx >= MAX_CL_STATS)
@@ -3428,14 +3428,14 @@ static struct svcustomstat_s *PR_CustomStat(int idx, int type)
 	sv.customstats[i].type = type;
 	sv.customstats[i].fld = 0;
 	sv.customstats[i].ptr = NULL;
-	return &sv.customstats[i];
+	return (svcustomstat_t*) & sv.customstats[i];
 }
 static void PF_clientstat(void)
 {
 	int idx = G_FLOAT(OFS_PARM0);
 	int type = G_FLOAT(OFS_PARM1);
 	int fldofs = G_INT(OFS_PARM2);
-	struct svcustomstat_s *stat = PR_CustomStat(idx, type);
+	svcustomstat_t *stat = PR_CustomStat(idx, type);
 	if (!stat)
 		return;
 	stat->fld = fldofs;

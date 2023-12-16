@@ -179,7 +179,7 @@ static void FileList_Print (filelist_item_t *list, const char *types[2], const c
 	filelist_item_t	*item;
 	const char		*desc;
 	char			buf[256], buf2[256];
-	char			padchar = '.' | 0x80;
+	char			padchar = '.' | (char)0x80;
 	size_t			ofsdesc = list == extralevels ? maxlevelnamelen + 2 : 0;
 
 	if (substr && *substr)
@@ -254,7 +254,7 @@ static maptype_t ExtraMaps_Categorize (const char *name, const searchpath_t *sou
 			break;
 		case 'e':
 			if (name[1] >= '1' && name[1] <= '4')
-				return MAPTYPE_ID_EP1_LEVEL + (name[1] - '1');
+				return (maptype_t)(MAPTYPE_ID_EP1_LEVEL + (name[1] - '1'));
 			if (!strcmp (name + 1, "nd"))
 				return MAPTYPE_ID_END;
 			break;
@@ -284,12 +284,12 @@ static maptype_t ExtraMaps_Categorize (const char *name, const searchpath_t *sou
 
 	base = *source->filename ? MAPTYPE_CUSTOM_MOD_START : MAPTYPE_MOD_START;
 	if (is_start)
-		return base + MAPTYPE_CUSTOM_MOD_START;
+		return (maptype_t)(base + MAPTYPE_CUSTOM_MOD_START);
 	if (is_end)
-		return base + MAPTYPE_CUSTOM_MOD_END;
+		return (maptype_t)(base + MAPTYPE_CUSTOM_MOD_END);
 	if (is_dm)
-		return base + MAPTYPE_CUSTOM_MOD_DM;
-	return base + MAPTYPE_CUSTOM_MOD_LEVEL;
+		return (maptype_t)(base + MAPTYPE_CUSTOM_MOD_DM);
+	return (maptype_t)(base + MAPTYPE_CUSTOM_MOD_LEVEL);
 }
 
 typedef struct levelinfo_s
@@ -316,7 +316,7 @@ ExtraMaps_GetType
 maptype_t ExtraMaps_GetType (const filelist_item_t *item)
 {
 	const levelinfo_t *info = ExtraMaps_GetInfo (item);
-	return SDL_AtomicGet ((SDL_atomic_t *) &info->type);
+	return (maptype_t)SDL_AtomicGet ((SDL_atomic_t *) &info->type);
 }
 
 /*
@@ -3135,7 +3135,7 @@ static void Host_Spawn_f (void)
 
 	MSG_WriteByte (&host_client->message, svc_signonnum);
 	MSG_WriteByte (&host_client->message, 3);
-	host_client->sendsignon = true;
+	host_client->sendsignon = PRESPAWN_FLUSH;
 }
 
 /*
