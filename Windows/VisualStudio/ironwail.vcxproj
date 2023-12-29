@@ -414,6 +414,11 @@ copy "$(SolutionDir)..\zlib\$(PlatformShortName)\*.dll" "$(TargetDir)"</Command>
   <ItemGroup>
     <Natvis Include="ironwail.natvis" />
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\..\Quake\ironwail.pak">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

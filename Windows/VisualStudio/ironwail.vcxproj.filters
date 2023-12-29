@@ -485,4 +485,9 @@
   <ItemGroup>
     <Natvis Include="ironwail.natvis" />
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\..\Quake\ironwail.pak">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+  </ItemGroup>
 </Project>
