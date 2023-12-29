@@ -67,22 +67,22 @@
     <_ProjectFileVersion>15.0.28307.799</_ProjectFileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(SolutionDir)Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)Build-$(ProjectName)\bin\$(PlatformShortName)\$(Configuration)\</OutDir>
     <IntDir>Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</IntDir>
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(SolutionDir)Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)Build-$(ProjectName)\bin\$(PlatformShortName)\$(Configuration)\</OutDir>
     <IntDir>Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)Build-$(ProjectName)\bin\$(PlatformShortName)\$(Configuration)\</OutDir>
     <IntDir>Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</IntDir>
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)Build-$(ProjectName)\bin\$(PlatformShortName)\$(Configuration)\</OutDir>
     <IntDir>Build-$(ProjectName)\$(PlatformShortName)\$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
