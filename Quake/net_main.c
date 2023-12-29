@@ -25,7 +25,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "net_sys.h"
 #include "net_defs.h"
 
+#ifndef WITHOUT_CURL
 #include <curl/curl.h>
+#endif
 
 qsocket_t	*net_activeSockets = NULL;
 qsocket_t	*net_freeSockets = NULL;
@@ -835,7 +837,9 @@ void NET_Init (void)
 		Con_DPrintf("TCP/IP address %s\n", my_tcpip_address);
 	}
 
+#ifndef WITHOUT_CURL
 	curl_global_init (CURL_GLOBAL_DEFAULT);
+#endif
 }
 
 /*
@@ -848,8 +852,9 @@ void NET_Shutdown (void)
 {
 	qsocket_t	*sock;
 
+#ifndef WITHOUT_CURL
 	curl_global_cleanup ();
-
+#endif
 	SetNetTime();
 
 	for (sock = net_activeSockets; sock; sock = sock->next)

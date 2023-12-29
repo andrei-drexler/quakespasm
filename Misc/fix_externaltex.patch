@@ -1,5 +1,7 @@
+-- from quake retexturing project
+
 diff --git a/Quake/gl_model.c b/Quake/gl_model.c
-index d193051..783dc4d 100644
+index 239d361..80948f1 100644
 --- a/Quake/gl_model.c
 +++ b/Quake/gl_model.c
 @@ -39,6 +39,8 @@ static void Mod_Print (void);
@@ -11,7 +13,7 @@ index d193051..783dc4d 100644
  static byte	*mod_novis;
  static int	mod_novis_capacity;
  
-@@ -542,6 +544,13 @@ static void Mod_LoadTextures (lump_t *l)
+@@ -549,6 +551,13 @@ static void Mod_LoadTextures (lump_t *l)
  		{
  			if (!q_strncasecmp(tx->name,"sky",3)) //sky texture //also note -- was Q_strncmp, changed to match qbsp
  			{
@@ -25,7 +27,7 @@ index d193051..783dc4d 100644
  				if (loadmodel->bspversion == BSPVERSION_QUAKE64)
  					Sky_LoadTextureQ64 (loadmodel, tx);
  				else
-@@ -596,6 +605,50 @@ static void Mod_LoadTextures (lump_t *l)
+@@ -606,6 +615,50 @@ static void Mod_LoadTextures (lump_t *l)
  				//external textures -- first look in "textures/mapname/" then look in "textures/"
  				mark = Hunk_LowMark ();
  				COM_StripExtension (loadmodel->name + 5, mapname, sizeof(mapname));
@@ -77,10 +79,10 @@ index d193051..783dc4d 100644
  				data = Image_LoadImage (filename, &fwidth, &fheight);
  				if (!data)
 diff --git a/Quake/gl_rmain.c b/Quake/gl_rmain.c
-index 332ab1e..783a9d6 100644
+index 6883161..4a8a745 100644
 --- a/Quake/gl_rmain.c
 +++ b/Quake/gl_rmain.c
-@@ -99,6 +99,8 @@ cvar_t	r_noshadow_list = {"r_noshadow_list", "progs/flame2.mdl,progs/flame.mdl,p
+@@ -100,6 +100,8 @@ cvar_t	r_noshadow_list = {"r_noshadow_list", "progs/flame2.mdl,progs/flame.mdl,p
  extern cvar_t	r_vfog;
  //johnfitz
  
@@ -90,7 +92,7 @@ index 332ab1e..783a9d6 100644
  
  cvar_t	r_lavaalpha = {"r_lavaalpha","0",CVAR_NONE};
 diff --git a/Quake/gl_rmisc.c b/Quake/gl_rmisc.c
-index dc3dff0..dbfe922 100644
+index 93791f6..4006c5d 100644
 --- a/Quake/gl_rmisc.c
 +++ b/Quake/gl_rmisc.c
 @@ -47,6 +47,7 @@ extern cvar_t r_nolerp_list;
@@ -101,11 +103,11 @@ index dc3dff0..dbfe922 100644
  
  extern gltexture_t *playertextures[MAX_SCOREBOARD]; //johnfitz
  
-@@ -218,6 +219,7 @@ void R_Init (void)
- 	Cvar_RegisterVariable (&r_noshadow_list);
- 	Cvar_SetCallback (&r_noshadow_list, R_Model_ExtraFlags_List_f);
- 	//johnfitz
-+	Cvar_RegisterVariable (&r_externaltexture_fix); //mk
+@@ -231,6 +232,7 @@ void R_Init (void)
+ 	Cvar_SetCallback (&r_lavaalpha, R_SetLavaalpha_f);
+ 	Cvar_SetCallback (&r_telealpha, R_SetTelealpha_f);
+ 	Cvar_SetCallback (&r_slimealpha, R_SetSlimealpha_f);
++	Cvar_RegisterVariable (&r_externaltexture_fix);//mk
  
- 	Cvar_RegisterVariable (&gl_zfix); // QuakeSpasm z-fighting fix
- 	Cvar_RegisterVariable (&r_lavaalpha);
+ 	R_InitParticles ();
+ 	R_SetClearColor_f (&r_clearcolor); //johnfitz

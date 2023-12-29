@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
-#ifdef PLATFORM_OSX
+#if defined(PLATFORM_OSX) || defined(PLATFORM_HAIKU)
 #include <libgen.h>	/* dirname() and basename() */
 #endif
 #include <sys/stat.h>
@@ -53,6 +53,7 @@ qboolean		isDedicated;
 
 #define	MAX_HANDLES		32	/* johnfitz -- was 10 */
 static FILE		*sys_handles[MAX_HANDLES];
+static qboolean		stdinIsATTY;	/* from ioquake3 source */
 
 static double rcp_counter_freq;
 
@@ -360,6 +361,23 @@ static char	cwd[MAX_OSPATH];
 #ifdef DO_USERDIRS
 static char	userdir[MAX_OSPATH];
 
+#ifdef PLATFORM_HAIKU
+#include <FindDirectory.h>
+#include <fs_info.h>
+
+static void Sys_GetUserdir (char *dst, size_t dstsize)
+{
+	dev_t volume = dev_for_path("/boot");
+	char buffer[B_PATH_NAME_LENGTH];
+	status_t result;
+
+	result = find_directory(B_USER_NONPACKAGED_DATA_DIRECTORY, volume, false, buffer, sizeof(buffer));
+	if (result != B_OK)
+		Sys_Error ("Couldn't determine userspace directory");
+
+	q_snprintf (dst, dstsize, "%s/%s", buffer, SYS_USERDIR);
+}
+#else
 static void Sys_GetUserdir (char *dst, size_t dstsize)
 {
 	size_t		n;
@@ -386,6 +404,7 @@ static void Sys_GetUserdir (char *dst, size_t dstsize)
 
 	q_snprintf (dst, dstsize, "%s/%s", home_dir, SYS_USERDIR);
 }
+#endif	/* PLATFORM_HAIKU */
 #endif	/* DO_USERDIRS */
 
 qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *dst, size_t dstsize)
@@ -529,6 +548,21 @@ static void Sys_GetBasedir (char *argv0, char *dst, size_t dstsize)
 {
 	char	*tmp;
 
+	#ifdef PLATFORM_HAIKU
+	if (realpath(argv0, dst) == NULL)
+	{
+		perror("realpath");
+		if (getcwd(dst, dstsize - 1) == NULL)
+	_fail:		Sys_Error ("Couldn't determine current directory");
+	}
+	else
+	{
+		/* strip off the binary name */
+		if (! (tmp = strdup (dst))) goto _fail;
+		q_strlcpy (dst, dirname(tmp), dstsize);
+		free (tmp);
+	}
+	#else
 	if (getcwd(dst, dstsize - 1) == NULL)
 		Sys_Error ("Couldn't determine current directory");
 
@@ -541,6 +575,7 @@ static void Sys_GetBasedir (char *argv0, char *dst, size_t dstsize)
 		if (tmp != dst && *tmp == '/')
 			*tmp = 0;
 	}
+	#endif
 }
 #endif
 
@@ -644,6 +679,12 @@ void Sys_FindClose (findfile_t *find)
 
 void Sys_Init (void)
 {
+	const char* term = getenv("TERM");
+	stdinIsATTY = isatty(STDIN_FILENO) &&
+			!(term && (!strcmp(term, "raw") || !strcmp(term, "dumb")));
+	if (!stdinIsATTY)
+		Sys_Printf("Terminal input not available.\n");
+
 	memset (cwd, 0, sizeof(cwd));
 	Sys_GetBasedir(host_parms->argv[0], cwd, sizeof(cwd));
 	host_parms->basedir = cwd;
@@ -715,6 +756,9 @@ void Sys_Printf (const char *fmt, ...)
 
 	UTF8_FromQuake (u8text, sizeof (u8text), qtext);
 	printf ("%s", u8text);
+
+	// log all messages to file as well if -condebug was specified
+	Con_DebugLog (u8text);
 }
 
 void Sys_Quit (void)
@@ -731,11 +775,15 @@ double Sys_DoubleTime (void)
 
 const char *Sys_ConsoleInput (void)
 {
+	static qboolean	con_eof = false;
 	static char	con_text[256];
 	static int	textlen;
 	char		c;
 	fd_set		set;
 	struct timeval	timeout;
+
+	if (!stdinIsATTY || con_eof)
+		return NULL;
 
 	FD_ZERO (&set);
 	FD_SET (0, &set);	// stdin
@@ -744,7 +792,13 @@ const char *Sys_ConsoleInput (void)
 
 	while (select (1, &set, NULL, NULL, &timeout))
 	{
-		read (0, &c, 1);
+		if (read(0, &c, 1) <= 0)
+		{
+			// Finish processing whatever is already in the
+			// buffer (if anything), then stop reading
+			con_eof = true;
+			c = '\n';
+		}
 		if (c == '\n' || c == '\r')
 		{
 			con_text[textlen] = '\0';

@@ -3,7 +3,7 @@
 <title>QuakeSpasm
 <toc>
 
-<em>Page last edited: October 2022.</em>
+<em>Page last edited: September 2023.</em>
 
 <sect>About<p>
 
@@ -23,7 +23,6 @@ but no CD-ROM support.
 <item><url url="https://sourceforge.net/p/quakespasm/quakespasm/ci/master/tree/" name="Latest code repository">
 <item><url url="https://github.com/sezero/quakespasm" name="Github mirror.">
 </itemize>
-
 
 <sect>Hints<p>
 <em>Visit the <url url="https://celephais.net/fitzquake/" name="FitzQuake homepage"> for a full run-down of the engine's commands and variables.</em>
@@ -64,13 +63,17 @@ If your controller doesn't work you can try placing <url url="https://raw.github
 
 <sect2>Cvars<p>
 <itemize>
-<item>joy_deadzone - Fraction of the stick travel to be deadzone, between 0 and 1. Default 0.175.
+<item>joy_deadzone_look - Fraction of look stick travel to be deadzone, between 0 and 1. Default is 0.175.
+<item>joy_deadzone_move - Same as above, but for the move stick. Default is 0.175.
 <item>joy_deadzone_trigger - Fraction of trigger range required to register a button press on the analog triggers, between 0 and 1. Default 0.2.
-<item>joy_sensitivity_yaw/pitch - Max angular speed in degrees/second when looking. Defaults are 300 for yaw (turning left/right) and 150 for pitch (up/down).
-<item>joy_exponent - For the look stick, the stick displacement (between 0 and 1) is raised to this power. Default is 3. A value of 1 would give a linear relationship between stick displacement and fraction of the maximum angular speed.
+<item>joy_outer_threshold_look - Outer deadzone for the look stick, between 0 and 1. Default 0.02.
+<item>joy_outer_threshold_move - Outer deadzone for the move stick, between 0 and 1. Default 0.02.
+<item>joy_sensitivity_yaw/pitch - Max angular speed in degrees/second when looking. Defaults are 240 for yaw (turning left/right) and 130 for pitch (up/down).
+<item>joy_exponent - For the look stick, the stick displacement (between 0 and 1) is raised to this power. Default is 2. A value of 1 would give a linear relationship between stick displacement and fraction of the maximum angular speed.
+<item>joy_exponent_move - Same as joy_exponent but for the move stick. Default is 2.
 <item>joy_invert - Set to 1 to invert the vertical axis of the look stick.
-<item>joy_swapmovelook - Set to 1 to swap the left and right analog stick functions. Default 0, move on the left stick, look on the right stick.
-<item>joy_enable - Set to 0 to disable controller support. Default 1.
+<item>joy_swapmovelook - Set to 1 to swap the left and right analog stick functions. Default is 0, move on the left stick, look on the right stick.
+<item>joy_enable - Set to 0 to disable controller support. Default is 1.
 </itemize>
 
 <sect2>Buttons<p>
@@ -135,6 +138,49 @@ QuakeSpasm 0.94 has support for playing the 2021 re-release content: Copy the qu
 
 
 <sect>Changes<p>
+
+<sect1>Changes in 0.96.1<p>
+<itemize>
+<item> Fix demo recording as client-only after connection to server (was broken by signon changes in 0.96.0. Thanks to Jozsef Szalontai for issue report.)
+<item> Fix potential buffer overflow in COM_Parse(), e.g. with maps with oversized 'wad' fields. (Thanks to Andrei Drexler.)
+<item> Minor code cleanups.
+</itemize>
+</p>
+
+<sect1>Changes in 0.96.0<p>
+<itemize>
+<item> <url url="https://github.com/sezero/quakespasm/pull/51" name="Adjustments"> to joystick defaults and behaviour. See the "Controller support / Cvars" section above.
+<item> Fix for a mouse grabbing issue on macOS.
+<item> Add missing support for <em>-ip</em> command line option on unix / macOS.
+<item> Backport angled sprites code from FTEQW (spriteframetype: 2, must have 8 frames per group.)
+<item> Bump the progs execution runaway loop limit to 16M.
+<item> Add signon buffer fragmentation to fix SZ_GetSpace errors on certain maps when using protocol 999.
+<item> Increased MAX_DATAGRAM to 64000 to overcome packet overflows.
+<item> Bump the MAXALIASFRAMES limit to 1024.
+<item> Fix arrays to have proper sizes in gl mesh code, reflecting MAXALIASTRIS and MAXALIASVERTS correctly. (fixes SIGSEGV in mj4m4/mj4m5.)
+<item> Increased default value of gl_farclip to 65536.
+<item> Increase chase cam target trace distance to allow for chasecam to function in large open maps (useful e.g. for the func_vehicle mod.)
+<item> Raised default maximum number of particles to 16384 (can be set up to 32768 with -particles on the command line.)
+<item> Fix on-screen keyboard showing up suddenly on Steam Deck when starting a map.
+<item> Fix viewmodel interpolation with >10Hz animations.
+<item> Fix a memory leak when exiting game in SDL2 builds.
+<item> Fix a possible crash when handling clipboard data on macOS.
+<item> Fix a potential crash after loading of saved game.
+<item> Fix possible out-of-bound reads when handling progs type sizes.
+<item> Fix Dutch angle VP_PARALLEL_UPRIGHT sprites.
+<item> Fix an issue with lights blending by using 10 bit color depth for lightmaps. (For GLSL mode only.) Disable with "-nopackedpixels", if necessary.
+<item> No relative motions when the window is not focused.
+<item> Status bar and intermission screen tweaks.
+<item> Properly display monster counts > 3 digits.
+<item> Fix console animation with scr_conspeed <= 0.
+<item> Fix mouselook not working upon game quickload during a demo play.
+<item> Haiku operating system support.
+<item> Fix console when server is run noninteractively with stdin redirected from /dev/null.
+<item> Updated Visual Studio project files.
+<item> Minor code cleanups. Updated third party code, e.g. SDL, music codecs, etc.
+<item> Thanks to Andrei Drexler, Alexey Lysiuk, Andrey Budko, Boris I. Bendovsky, Chris Cowan, Maciej Olędzki, Simon McVittie, OscarL, Eric Wasylishen, Jaycie Ewald and Spike for patches.
+</itemize>
+</p>
 
 <sect1>Changes in 0.95.1<p>
 <itemize>

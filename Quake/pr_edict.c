@@ -34,6 +34,8 @@ int		type_size[8] = {
 	1	// sizeof(void *) / 4		// ev_pointer
 };
 
+#define NUM_TYPE_SIZES (int)Q_COUNTOF(type_size)
+
 static ddef_t	*ED_FieldAtOfs (int ofs);
 static qboolean	ED_ParseEpair (void *base, ddef_t *key, const char *s, qboolean zoned);
 
@@ -599,6 +601,7 @@ padded to 20 field width
 const char *PR_GlobalString (int ofs)
 {
 	static char	line[512];
+	static const int lastchari = Q_COUNTOF(line) - 2;
 	const char	*s;
 	int		i;
 	ddef_t		*def;
@@ -617,7 +620,11 @@ const char *PR_GlobalString (int ofs)
 	i = strlen(line);
 	for ( ; i < 20; i++)
 		strcat (line, " ");
-	strcat (line, " ");
+
+	if (i < lastchari)
+		strcat (line, " ");
+	else
+		line[lastchari] = ' ';
 
 	return line;
 }
@@ -625,6 +632,7 @@ const char *PR_GlobalString (int ofs)
 const char *PR_GlobalStringNoContents (int ofs)
 {
 	static char	line[512];
+	static const int lastchari = Q_COUNTOF(line) - 2;
 	int		i;
 	ddef_t		*def;
 
@@ -637,7 +645,11 @@ const char *PR_GlobalStringNoContents (int ofs)
 	i = strlen(line);
 	for ( ; i < 20; i++)
 		strcat (line, " ");
-	strcat (line, " ");
+
+	if (i < lastchari)
+		strcat (line, " ");
+	else
+		line[lastchari] = ' ';
 
 	return line;
 }
@@ -679,6 +691,9 @@ void ED_Print (edict_t *ed)
 
 	// if the value is still all 0, skip the field
 		type = d->type & ~DEF_SAVEGLOBAL;
+
+		if (type >= NUM_TYPE_SIZES)
+			continue;
 
 		for (j = 0; j < type_size[type]; j++)
 		{
@@ -734,6 +749,10 @@ void ED_Write (savedata_t *save, edict_t *ed)
 
 	// if the value is still all 0, skip the field
 		type = d->type & ~DEF_SAVEGLOBAL;
+
+		if (type >= NUM_TYPE_SIZES)
+			continue;
+
 		for (j = 0; j < type_size[type]; j++)
 		{
 			if (v[j])
@@ -1187,7 +1206,7 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 	}
 
 	if (!init)
-		ED_AddToFreeList (ent);
+		ED_Free (ent);
 
 	return data;
 }

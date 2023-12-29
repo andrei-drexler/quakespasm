@@ -68,10 +68,6 @@ cvar_t	gl_cshiftpercent_powerup = {"gl_cshiftpercent_powerup", "100", CVAR_NONE}
 
 cvar_t	r_viewmodel_quake = {"r_viewmodel_quake", "0", CVAR_ARCHIVE};
 
-float	v_dmg_time, v_dmg_roll, v_dmg_pitch;
-
-extern	int			in_forward, in_forward2, in_back;
-
 vec3_t	v_punchangles[2]; //johnfitz -- copied from cl.punchangle.  0 is current, 1 is previous value. never the same unless map just loaded
 
 /*
@@ -253,10 +249,12 @@ void V_DriftPitch (void)
 ==============================================================================
 */
 
-cshift_t	cshift_empty = { {130,80,50}, 0 };
-cshift_t	cshift_water = { {130,80,50}, 128 };
-cshift_t	cshift_slime = { {0,25,5}, 150 };
-cshift_t	cshift_lava = { {255,80,0}, 150 };
+static cshift_t cshift_empty = { {130,80,50}, 0 };
+static cshift_t cshift_water = { {130,80,50}, 128 };
+static cshift_t cshift_slime = { {0,25,5}, 150 };
+static cshift_t cshift_lava = { {255,80,0}, 150 };
+
+static float v_dmg_time, v_dmg_roll, v_dmg_pitch;
 
 float		v_blend[4];		// rgba 0.0 - 1.0; see note in V_PolyBlend for more info
 

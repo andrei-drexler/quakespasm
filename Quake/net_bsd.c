@@ -63,7 +63,7 @@ net_driver_t net_drivers[] =
 	}
 };
 
-const int net_numdrivers = (sizeof(net_drivers) / sizeof(net_drivers[0]));
+const int net_numdrivers = Q_COUNTOF(net_drivers);
 
 #include "net_udp.h"
 
@@ -93,5 +93,4 @@ net_landriver_t	net_landrivers[] =
 	}
 };
 
-const int net_numlandrivers = (sizeof(net_landrivers) / sizeof(net_landrivers[0]));
-
+const int net_numlandrivers = Q_COUNTOF(net_landrivers);

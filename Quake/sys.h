@@ -126,5 +126,14 @@ void Sys_SendKeyEvents (void);
 
 void Sys_ActivateKeyFilter (qboolean active);
 
+static inline qboolean Sys_IsPathSep (char c)
+{
+#ifdef _WIN32
+	return c == '/' || c == '\\';
+#else
+	return c == '/';
+#endif
+}
+
 #endif	/* _QUAKE_SYS_H */
 

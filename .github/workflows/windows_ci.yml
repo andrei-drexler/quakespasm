@@ -10,6 +10,20 @@ jobs:
         platform: [x64, Win32]
     steps:
     - uses: actions/checkout@v3
+    - name: Set environment variables
+      run: |
+        $gitrev = $(git describe --always)
+        $gitbranch = $(git branch --show-current)
+        $ver_suffix = ("$gitbranch" -eq "master" -Or "$gitbranch" -eq "main") ? "-$gitrev" : "-$gitbranch-$gitrev"
+        $platform_alt = ("${{matrix.platform}}" -eq "x64") ? "win64" : "win32"
+        $platform_short = ("${{matrix.platform}}" -eq "Win32") ? "x86" : "${{matrix.platform}}"
+        $build_artifact = "ironwail${ver_suffix}-${platform_alt}"
+        echo "VER_SUFFIX=$ver_suffix" >> ${env:GITHUB_ENV}
+        echo "BUILD_ARTIFACT=$build_artifact" >> ${env:GITHUB_ENV}
+        echo "BUILD_DIR=$build_artifact" >> ${env:GITHUB_ENV}
+        echo "PLATFORM_ALT=$platform_alt" >> ${env:GITHUB_ENV}
+        echo "PLATFORM_SHORT=$platform_short" >> ${env:GITHUB_ENV}
+        echo "ForceImportBeforeCppTargets=${env:GITHUB_WORKSPACE}\Windows\VisualStudio\custom_build.props" >> ${env:GITHUB_ENV}
     - name: Build
       run: |
         $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -22,3 +36,20 @@ jobs:
         )
         & $msbuild Windows\VisualStudio\ironwail.sln $options
         if (-not $?) { throw "Build failed" }
+    - name: Prepare archive
+      run: |
+            $compiledir = "Windows\VisualStudio\${env:BUILD_DIR}"
+            $zipdir = "artifact\${env:BUILD_ARTIFACT}"
+            mkdir $zipdir | out-null
+            copy ${compiledir}\*.exe $zipdir
+            copy ${compiledir}\*.dll $zipdir
+            copy Quake\ironwail.pak $zipdir
+            copy Quakespasm.html $zipdir
+            copy Quakespasm.txt $zipdir
+            copy Quakespasm-Music.txt $zipdir
+            copy LICENSE.txt $zipdir
+    - name: Upload archive
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.BUILD_ARTIFACT }}
+        path: artifact/*

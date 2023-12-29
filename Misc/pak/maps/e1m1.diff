@@ -1,0 +1,18 @@
+--- e1m1.ent
++++ e1m1@c49d.ent
+@@ -715,14 +715,15 @@
+ {
+ "classname" "func_door"
+ "targetname" "t4"
+ "angle" "-2"
+ "spawnflags" "1"
+ "sounds" "2"
+ "model" "*15"
++"lip" "7" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "trigger_multiple"
+ "target" "t4"
+ "health" "1"
+ "model" "*16"
+ }

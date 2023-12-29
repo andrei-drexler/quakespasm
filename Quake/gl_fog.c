@@ -32,18 +32,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define DEFAULT_DENSITY 0.0
 #define DEFAULT_GRAY 0.3
 
-float fog_density;
-float fog_red;
-float fog_green;
-float fog_blue;
+static float fog_density;
+static float fog_red;
+static float fog_green;
+static float fog_blue;
 
-float old_density;
-float old_red;
-float old_green;
-float old_blue;
+static float old_density;
+static float old_red;
+static float old_green;
+static float old_blue;
 
-float fade_time; //duration of fade
-float fade_done; //time when fade will be done
+static float fade_time; //duration of fade
+static float fade_done; //time when fade will be done
 
 extern float skyfog;
 

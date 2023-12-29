@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#ifndef _QUAKE_INPUT_H
-#define _QUAKE_INPUT_H
+#ifndef QUAKE_INPUT_H
+#define QUAKE_INPUT_H
 
 // input.h -- external (non-keyboard) input devices
 
@@ -34,12 +34,17 @@ void IN_Commands (void);
 // mouse moved by dx and dy pixels
 void IN_MouseMotion(int dx, int dy);
 
+void IN_StartGyroCalibration (void);
+qboolean IN_IsCalibratingGyro (void);
+
 
 void IN_SendKeyEvents (void);
 // used as a callback for Sys_SendKeyEvents() by some drivers
 
 void IN_UpdateInputMode (void);
 // do stuff if input mode (text/non-text) changes matter to the keyboard driver
+
+enum textmode_t IN_GetTextMode (void);
 
 void IN_Move (usercmd_t *cmd);
 // add additional movement on top of the keyboard move cmd
@@ -55,5 +60,4 @@ void IN_Deactivate (qboolean free_cursor);
 void IN_DeactivateForConsole (void);
 void IN_DeactivateForMenu (void);
 
-#endif	/* _QUAKE_INPUT_H */
-
+#endif

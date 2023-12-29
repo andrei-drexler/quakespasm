@@ -31,16 +31,13 @@ extern cvar_t r_oit;
 //up to 16 color translated skins
 gltexture_t *playertextures[MAX_SCOREBOARD]; //johnfitz -- changed to an array of pointers
 
-#define NUMVERTEXNORMALS	162
-
-float	r_avertexnormals[NUMVERTEXNORMALS][3] =
-{
+const float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
 #include "anorms.h"
 };
 
 extern vec3_t	lightcolor; //johnfitz -- replaces "float shadelight" for lit support
 
-float	entalpha; //johnfitz
+static float	entalpha; //johnfitz
 
 //johnfitz -- struct for passing lerp information to drawing functions
 typedef struct {

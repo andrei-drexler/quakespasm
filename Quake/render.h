@@ -147,4 +147,3 @@ extern	int		reinit_surfcache;	// if 1, surface cache is currently empty and
 void D_FlushCaches (void);
 
 #endif	/* _QUAKE_RENDER_H */
-

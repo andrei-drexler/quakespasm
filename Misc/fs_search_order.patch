@@ -1,10 +1,10 @@
-allow plain files to override files inside a PAK file -- Sander van Dijk.
+allow plain files to override files inside a PAK -- Sander van Dijk.
 
 diff --git a/Quake/common.c b/Quake/common.c
-index eff4c30..1478d77 100644
+index c80450f..6074711 100644
 --- a/Quake/common.c
 +++ b/Quake/common.c
-@@ -2030,13 +2030,6 @@ static void COM_AddGameDirectory (const char *base, const char *dir)
+@@ -2107,13 +2107,6 @@ static void COM_AddGameDirectory (const char *base, const char *dir)
  	else	path_id = 1U;
  
  _add_path:
@@ -18,7 +18,7 @@ index eff4c30..1478d77 100644
  	// add any pak files in the format pak0.pak pak1.pak, ...
  	for (i = 0; ; i++)
  	{
-@@ -2068,6 +2061,13 @@ _add_path:
+@@ -2145,6 +2138,13 @@ _add_path:
  		if (!pak) break;
  	}
  
@@ -32,4 +32,3 @@ index eff4c30..1478d77 100644
  	if (!been_here && host_parms->userdir != host_parms->basedir)
  	{
  		been_here = true;
-

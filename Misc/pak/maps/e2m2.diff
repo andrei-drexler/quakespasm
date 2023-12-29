@@ -1,0 +1,54 @@
+--- e2m2.ent
++++ e2m2@fbfe.ent
+@@ -908,20 +908,21 @@
+ {
+ "classname" "func_door"
+ "angle" "-2"
+ "spawnflags" "33"
+ "speed" "10"
+ "sounds" "3"
+ "wait" "-1"
+ "targetname" "t16"
+ "dmg" "100"
+ "model" "*13"
++"lip" "7" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "sounds" "3"
+ "classname" "func_door"
+ "angle" "90"
+ "spawnflags" "2056"
+ "wait" "-1"
+ "model" "*14"
+ }
+ {
+@@ -1423,27 +1424,27 @@
+ {
+ "target" "t39"
+ "targetname" "t40"
+ "origin" "-216 280 104"
+ "classname" "path_corner"
+ }
+ {
+ "target" "t40"
+ "targetname" "t38"
+ "classname" "path_corner"
+-"origin" "-16 280 104"
++"origin" "-15 280 104" // svdijk -- changed to prevent z-fighting (was "-16 280 104")
+ }
+ {
+ "target" "t38"
+ "wait" "-1"
+ "targetname" "t39"
+-"origin" "-16 280 104"
++"origin" "-15 280 104" // svdijk -- changed to prevent z-fighting (was "-16 280 104")
+ "classname" "path_corner"
+ }
+ {
+ "angle" "180"
+ "origin" "680 1472 24"
+ "classname" "monster_ogre"
+ "spawnflags" "256"
+ }
+ {
+ "spawnflags" "256"

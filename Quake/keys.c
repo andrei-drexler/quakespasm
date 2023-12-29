@@ -52,7 +52,7 @@ typedef struct
 	int		keynum;
 } keyname_t;
 
-keyname_t keynames[] =
+static const keyname_t keynames[] =
 {
 	{"TAB", K_TAB},
 	{"ENTER", K_ENTER},
@@ -295,6 +295,7 @@ void Key_Console (int key)
 	{
 	case K_ENTER:
 	case K_KP_ENTER:
+	case K_ABUTTON:
 		key_tabpartial[0] = 0;
 		Cbuf_AddText (workline + 1);	// skip the prompt
 		Cbuf_AddText ("\n");
@@ -369,6 +370,7 @@ void Key_Console (int key)
 		}
 		else	key_linepos = 1;
 		Con_TabComplete (TABCOMPLETE_AUTOHINT);
+		Con_ForceMouseMove ();
 		return;
 
 	case K_END:
@@ -376,20 +378,17 @@ void Key_Console (int key)
 			con_backscroll = 0;
 		else	key_linepos = strlen(workline);
 		Con_TabComplete (TABCOMPLETE_AUTOHINT);
+		Con_ForceMouseMove ();
 		return;
 
 	case K_PGUP:
 	case K_MWHEELUP:
-		con_backscroll += keydown[K_CTRL] ? ((con_vislines>>3) - 4) : 2;
-		if (con_backscroll > con_totallines - (vid.height>>3) - 1)
-			con_backscroll = con_totallines - (vid.height>>3) - 1;
+		Con_Scroll (keydown[K_CTRL] ? ((con_vislines>>3) - 4) : 2);
 		return;
 
 	case K_PGDN:
 	case K_MWHEELDOWN:
-		con_backscroll -= keydown[K_CTRL] ? ((con_vislines>>3) - 4) : 2;
-		if (con_backscroll < 0)
-			con_backscroll = 0;
+		Con_Scroll (keydown[K_CTRL] ? -((con_vislines>>3) - 4) : -2);
 		return;
 
 	case K_LEFTARROW:
@@ -478,6 +477,11 @@ void Key_Console (int key)
 	case K_INS:
 		if (keydown[K_SHIFT])		/* Shift-Ins paste */
 			PasteToConsole();
+		else if (keydown[K_CTRL])
+		{
+			Con_CopySelectionToClipboard ();
+			return;
+		}
 		else	key_insert ^= 1;
 		Con_TabComplete (TABCOMPLETE_AUTOHINT);
 		return;
@@ -501,6 +505,8 @@ void Key_Console (int key)
 	case 'c':
 	case 'C':
 		if (keydown[K_CTRL]) {		/* Ctrl+C: abort the line -- S.A */
+			if (Con_CopySelectionToClipboard ())
+				return;
 			Con_Printf ("%s\n", workline);
 			workline[0] = ']';
 			workline[1] = 0;
@@ -619,7 +625,7 @@ the K_* names are matched up.
 */
 int Key_StringToKeynum (const char *str)
 {
-	keyname_t	*kn;
+	const keyname_t *kn;
 
 	if (!str || !str[0])
 		return -1;
@@ -646,7 +652,7 @@ FIXME: handle quote special (general escape sequence?)
 const char *Key_KeynumToString (int keynum)
 {
 	static	char	tinystr[128][2];
-	keyname_t	*kn;
+	const keyname_t	*kn;
 
 	if (keynum == -1)
 		return "<KEY NOT FOUND>";
@@ -968,6 +974,7 @@ void Key_Init (void)
 #endif
 	consolekeys[K_MWHEELUP] = true;
 	consolekeys[K_MWHEELDOWN] = true;
+	consolekeys[K_ABUTTON] = true;
 
 //
 // initialize menubound[]
@@ -1045,6 +1052,21 @@ Should NOT be called during an interrupt!
 */
 void Key_Event (int key, qboolean down)
 {
+	Key_EventWithKeycode (key, down, 0);
+}
+
+/*
+===================
+Key_EventWithKeycode
+
+Called by the system between frames for both key up and key down events
+Should NOT be called during an interrupt!
+keycode parameter should have the key's actual keycode using the current keyboard layout,
+not necessarily the US-keyboard-based scancode. Pass 0 if not applicable.
+===================
+*/
+void Key_EventWithKeycode (int key, qboolean down, int keycode)
+{
 	char	*kb;
 	char	cmd[1024];
 	qboolean wasdown;
@@ -1085,9 +1107,18 @@ void Key_Event (int key, qboolean down)
 	if (key_inputgrab.active)
 	{
 		if (down)
+		{
 			key_inputgrab.lastkey = key;
+			if (keycode > 0)
+				key_inputgrab.lastchar = keycode;
+		}
 		return;
 	}
+
+// generate char events if we want text input without popping up an on-screen keyboard
+// when a physical one isn't present, e.g. when using a searchable menu on the Steam Deck
+	if (down && IN_GetTextMode () == TEXTMODE_NOPOPUP)
+		Char_Event (keycode);
 
 // handle escape specialy, so the user can never unbind it
 	if (key == K_ESCAPE)
@@ -1138,11 +1169,9 @@ void Key_Event (int key, qboolean down)
 		kb = keybindings[key];
 		if (kb && kb[0] == '+')
 		{
-			sprintf (cmd, "-%s %i\n", kb+1, key);
+			q_snprintf (cmd, sizeof (cmd), "-%s %i\n", kb+1, key);
 			Cbuf_AddText (cmd);
 		}
-		if (key_dest == key_console && key == K_MOUSE1 && !down)
-			Con_Click ();
 		return;
 	}
 
@@ -1163,7 +1192,7 @@ void Key_Event (int key, qboolean down)
 		{
 			if (kb[0] == '+')
 			{	// button commands add keynum as a parm
-				sprintf (cmd, "%s %i\n", kb, key);
+				q_snprintf (cmd, sizeof (cmd), "%s %i\n", kb, key);
 				Cbuf_AddText (cmd);
 			}
 			else
@@ -1246,25 +1275,30 @@ void Char_Event (int key)
 Key_TextEntry
 ===================
 */
-qboolean Key_TextEntry (void)
+textmode_t Key_TextEntry (void)
 {
 	if (key_inputgrab.active)
-		return true;
+	{
+		// This path is used for simple single-letter inputs (y/n prompts) that also
+		// accept controller input, so we don't want an onscreen keyboard for this case.
+		return TEXTMODE_NOPOPUP;
+	}
 
 	switch (key_dest)
 	{
 	case key_message:
-		return true;
+		return TEXTMODE_ON;
 	case key_menu:
 		return M_TextEntry();
 	case key_game:
-		if (!con_forcedup)
-			return false;
-		/* fallthrough */
+		// Don't return true even during con_forcedup, because that happens while starting a
+		// game and we don't to trigger text input (and the onscreen keyboard on some devices)
+		// during this.
+		return TEXTMODE_OFF;
 	case key_console:
-		return true;
+		return TEXTMODE_ON;
 	default:
-		return false;
+		return TEXTMODE_OFF;
 	}
 }
 

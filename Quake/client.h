@@ -204,6 +204,7 @@ typedef struct
 
 
 	float		last_received_message;	// (realtime) for net trouble icon
+	float		spawntime;		// time when signon 4 was received
 
 //
 // information that is static for the entire time connected to a server
@@ -341,6 +342,7 @@ void CL_SendMove (const usercmd_t *cmd);
 int  CL_ReadFromServer (void);
 void CL_AdjustAngles (void);
 void CL_BaseMove (usercmd_t *cmd);
+qboolean CL_InCutscene (void);
 
 void CL_ParseTEnt (void);
 void CL_UpdateTEnts (void);

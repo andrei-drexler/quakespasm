@@ -24,8 +24,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "q_ctype.h"
 #include "json.h"
-
+#include <time.h>
+#ifndef WITHOUT_CURL
 #include <curl/curl.h>
+#endif
 #define MAX_URL	2048
 
 extern cvar_t	pausable;
@@ -569,6 +571,10 @@ typedef struct download_s
 
 static qboolean Download (const char *url, download_t *download)
 {
+#ifdef WITHOUT_CURL
+	download->error = "download support disabled at compile time.";
+	return false;
+#else
 	CURL				*curl;
 	CURLM				*multi_handle;
 	CURLMcode			mc;
@@ -647,6 +653,7 @@ done:
 	curl_multi_cleanup (multi_handle);
 
 	return !download->error && !still_running && download->response == 200;
+#endif
 }
 
 typedef struct
@@ -673,7 +680,11 @@ static SDL_Thread*		extramods_install_thread;
 const char *Modlist_GetFullName (const filelist_item_t *item)
 {
 	const modinfo_t *info = (const modinfo_t *) (item + 1);
-	return info->full_name;
+	const char *full_name = info->full_name;
+	// 2021 rerelease episode names are localized
+	if (full_name && full_name[0] == '$')
+		full_name = LOC_GetRawString (full_name);
+	return full_name;
 }
 
 const char *Modlist_GetDescription (const filelist_item_t *item)
@@ -786,8 +797,8 @@ static void Modlist_RegisterAddons (void *param)
 		"Add-on server status:\n"
 		"%3d add-on%s available for download\n"
 		"%3d add-on%s already installed\n\n",
-		total - installed, PLURAL (total - installed),
-		installed, PLURAL (installed)
+		PLURAL (total - installed),
+		PLURAL (installed)
 	);
 
 	extramods_json = json;
@@ -1076,6 +1087,7 @@ static void Modlist_Add (const char *name)
 	filelist_item_t	*item;
 	modinfo_t		*info;
 	int				i;
+	unsigned int	path_id;
 
 	memset (&info, 0, sizeof (info));
 	item = FileList_AddWithData (name, NULL, sizeof (*info), &modlist);
@@ -1110,6 +1122,50 @@ static void Modlist_Add (const char *name)
 
 			if (info->full_name)
 				break;
+		}
+	}
+
+	// look for mapdb.json file
+	if (!info->full_name)
+	{
+		char *mapdb = (char *) COM_LoadMallocFile ("mapdb.json", &path_id);
+		if (mapdb)
+		{
+			qboolean is_base_mapdb = !com_searchpaths || path_id < com_searchpaths->path_id;
+			json_t *json = JSON_Parse (mapdb);
+			free (mapdb);
+			if (json)
+			{
+				const jsonentry_t *episodes = JSON_Find (json->root, "episodes", JSON_ARRAY);
+				if (episodes)
+				{
+					const jsonentry_t *entry;
+					for (entry = episodes->firstchild; entry; entry = entry->next)
+					{
+						const char *mod_name = JSON_FindString (entry, "name");
+						const char *mod_dir = JSON_FindString (entry, "dir");
+						if (!mod_name || !mod_dir)
+							continue;
+
+						// The 2021 rerelease has a single mapdb.json file in id1 with definitions
+						// for all the included episodes (id1, hipnotic, rogue, dopa & mg1).
+						// If the mapdb file comes from a base dir we only use the episode name
+						// if the local mod dir matches the episode dir.
+						// We also perform a dir check if the name of the episode is "copper"
+						// in order to avoid showing all Copper-based mods as "Underdark Overbright"
+						// if they include Copper's mapdb.json unmodified.
+						// In all other cases we skip the dir check so that players can rename mod dirs
+						// as they please without losing their descriptions in the add-on menu.
+						if (is_base_mapdb || q_strcasecmp (mod_dir, "copper") != 0)
+							if (q_strcasecmp (mod_dir, name) != 0)
+								continue;
+
+						info->full_name = strdup (mod_name);
+						break;
+					}
+				}
+				JSON_Free (json);
+			}
 		}
 	}
 
@@ -1182,7 +1238,11 @@ static void Modlist_FindLocal (void)
 				continue;
 #endif
 			if (Modlist_Check (find->name, com_basedirs[i]))
+			{
+				COM_AddGameDirectory (find->name);
 				Modlist_Add (find->name);
+				COM_ResetGameDirectories ("");
+			}
 		}
 	}
 }
@@ -1244,6 +1304,15 @@ void Modlist_ShutDown (void)
 		SDL_WaitThread (extramods_install_thread, NULL);
 		extramods_install_thread = NULL;
 	}
+}
+
+qboolean Modlist_IsInstalled (const char *game)
+{
+	filelist_item_t *item;
+	for (item = modlist; item; item = item->next)
+		if (q_strcasecmp (item->name, game) == 0 && Modlist_GetStatus (item) == MODSTATUS_INSTALLED)
+			return true;
+	return false;
 }
 
 //==============================================================================
@@ -1376,12 +1445,22 @@ static qboolean SkyList_AddFile (const char *path)
 	char		skyname[MAX_QPATH];
 	size_t		len;
 
+	// Check that the file is in the right directory
+	// We need this for pak files, which are all passed to this function
+	// without any kind of path filtering
+	len = strlen (path);
+	if (len <= sizeof (prefix) - 1 || q_strncasecmp (path, prefix, sizeof (prefix) - 1))
+		return false;
+	path += sizeof (prefix) - 1;
+	len -= sizeof (prefix) - 1;
+
+	// Only accept TGA files
 	ext = COM_FileGetExtension (path);
 	if (q_strcasecmp (ext, "tga") != 0)
 		return false;
 
+	// Check that the image has the right suffix
 	COM_StripExtension (path, skyname, sizeof (skyname));
-	len = strlen (skyname);
 	if (len < sizeof (suffix) - 1)
 		return false;
 	len -= sizeof (suffix) - 1;
@@ -1389,11 +1468,7 @@ static qboolean SkyList_AddFile (const char *path)
 		return false;
 	skyname[len] = '\0';
 
-	SDL_assert (len > sizeof (prefix) - 1);
-	SDL_assert (!q_strncasecmp (skyname, prefix, sizeof (prefix) - 1));
-	if (len <= sizeof (prefix) - 1)
-		return false;
-
+	// All ok, add skybox to the list
 	FileList_Add (skyname + (sizeof (prefix) - 1), &skylist);
 
 	return true;
@@ -1714,12 +1789,12 @@ static void Host_SetPos_f(void)
 		SV_ClientPrintf("   setpos <x> <y> <z> <pitch> <yaw> <roll>\n");
 		SV_ClientPrintf("current values:\n");
 		SV_ClientPrintf("   %i %i %i %i %i %i\n",
-			(int)sv_player->v.origin[0],
-			(int)sv_player->v.origin[1],
-			(int)sv_player->v.origin[2],
-			(int)sv_player->v.v_angle[0],
-			(int)sv_player->v.v_angle[1],
-			(int)sv_player->v.v_angle[2]);
+			Q_rint (sv_player->v.origin[0]),
+			Q_rint (sv_player->v.origin[1]),
+			Q_rint (sv_player->v.origin[2]),
+			Q_rint (sv_player->v.v_angle[0]),
+			Q_rint (sv_player->v.v_angle[1]),
+			Q_rint (sv_player->v.v_angle[2]));
 		return;
 	}
 
@@ -2120,38 +2195,39 @@ Host_SavegameComment
 Writes a SAVEGAME_COMMENT_LENGTH character comment describing the current
 ===============
 */
-void Host_SavegameComment (char *text)
+void Host_SavegameComment (char text[SAVEGAME_COMMENT_LENGTH + 1])
 {
 	int		i;
 	char	*levelname;
 	char	kills[20];
-	char	*p1, *p2;
+	char	*p;
 
 	for (i = 0; i < SAVEGAME_COMMENT_LENGTH; i++)
 		text[i] = ' ';
+	text[SAVEGAME_COMMENT_LENGTH] = '\0';
 
-// Remove CR/LFs from level name to avoid broken saves, e.g. with autumn_sp map:
-// https://celephais.net/board/view_thread.php?id=60452&start=3666
 	levelname = cl.levelname[0] ? cl.levelname : cl.mapname;
-	p1 = strchr(levelname, '\n');
-	p2 = strchr(levelname, '\r');
-	if (p1 != NULL) *p1 = 0;
-	if (p2 != NULL) *p2 = 0;
 
 	i = (int) strlen(levelname);
 	if (i > 22) i = 22;
 	memcpy (text, levelname, (size_t)i);
+
+// Remove CR/LFs from level name to avoid broken saves, e.g. with autumn_sp map:
+// https://celephais.net/board/view_thread.php?id=60452&start=3666
+	while ((p = strchr(text, '\n')) != NULL)
+		*p = ' ';
+	while ((p = strchr(text, '\r')) != NULL)
+		*p = ' ';
+
 	sprintf (kills,"kills:%3i/%3i", cl.stats[STAT_MONSTERS], cl.stats[STAT_TOTALMONSTERS]);
 	memcpy (text+22, kills, strlen(kills));
+
 // convert space to _ to make stdio happy
 	for (i = 0; i < SAVEGAME_COMMENT_LENGTH; i++)
 	{
 		if (text[i] == ' ')
 			text[i] = '_';
 	}
-	if (p1 != NULL) *p1 = '\n';
-	if (p2 != NULL) *p2 = '\r';
-	text[SAVEGAME_COMMENT_LENGTH] = '\0';
 }
 
 static void Host_InvalidateSave (const char *relname)
@@ -2397,11 +2473,12 @@ static void Host_Loadgame_f (void)
 	int	entnum;
 	int	version;
 	float	spawn_parms[NUM_SPAWN_PARMS];
+	qboolean kexonly = false;
 
 	if (cmd_source != src_command)
 		return;
 
-	if (Cmd_Argc() != 2)
+	if (Cmd_Argc() < 2)
 	{
 		Con_Printf ("load <savename> : load a game\n");
 		return;
@@ -2412,6 +2489,10 @@ static void Host_Loadgame_f (void)
 		Con_Printf ("Relative pathnames are not allowed.\n");
 		return;
 	}
+
+	// When loading a file that doesn't belong to a mod dir we only accept KEX saves
+	if (Cmd_Argc () >= 3 && q_strcasecmp (Cmd_Argv (2), "kex") == 0)
+		kexonly = true;
 
 	if (nomonsters.value)
 	{
@@ -2425,6 +2506,21 @@ static void Host_Loadgame_f (void)
 	COM_AddExtension (relname, ".sav", sizeof(relname));
 
 	q_snprintf (name, sizeof(name), "%s/%s", com_gamedir, relname);
+
+	// Look for savefile in basedirs instead of gamedir
+	if (kexonly || !Sys_FileExists (name))
+	{
+		for (i = com_numbasedirs - 1; i >= 0; i--)
+		{
+			q_snprintf (name, sizeof(name), "%s/%s", com_basedirs[i], relname);
+			if (Sys_FileExists (name))
+			{
+				kexonly = true;
+				break;
+			}
+		}
+	}
+
 	if (!Sys_FileExists (name))
 	{
 		Con_Printf ("ERROR: %s not found.\n", relname);
@@ -2453,14 +2549,33 @@ static void Host_Loadgame_f (void)
 
 	data = start;
 	data = COM_ParseIntNewline (data, &version);
-	if (version != SAVEGAME_VERSION)
+	if (version == SAVEGAME_VERSION_KEX)
 	{
+		extern char com_gamenames[];
+		const char *game = *com_gamenames ? com_gamenames : GAMENAME;
+		data = COM_ParseStringNewline (data);
+		if (strcmp (game, com_token) != 0)
+		{
+			if (!Modlist_IsInstalled (com_token))
+			{
+				Con_Printf ("ERROR: mod \"%s\" is not installed.\n", com_token);
+				return;
+			}
+			COM_SwitchGame (com_token);
+			Cbuf_Execute ();
+			if (key_dest == key_menu)
+				M_ToggleMenu_f ();
+		}
+	}
+	else if (version != SAVEGAME_VERSION || kexonly)
+	{
+		int expected = kexonly ? SAVEGAME_VERSION_KEX : SAVEGAME_VERSION;
 		free (start);
 		start = NULL;
 		if (sv.autoloading)
-			Con_Printf ("ERROR: Savegame is version %i, not %i\n", version, SAVEGAME_VERSION);
+			Con_Printf ("ERROR: Savegame is version %i, not %i\n", version, expected);
 		else
-			Host_Error ("Savegame is version %i, not %i", version, SAVEGAME_VERSION);
+			Host_Error ("Savegame is version %i, not %i", version, expected);
 		Host_InvalidateSave (relname);
 		SCR_EndLoadingPlaque ();
 		return;
@@ -2539,6 +2654,10 @@ static void Host_Loadgame_f (void)
 		entnum++;
 	}
 
+	// Free edicts allocated during map loading but no longer used after restoring saved game state
+	for (i = entnum; i < qcvm->num_edicts; i++)
+		ED_Free (EDICT_NUM (i));
+
 	qcvm->num_edicts = entnum;
 	qcvm->time = time;
 	sv.autosave.time = time;
@@ -2558,6 +2677,9 @@ static void Host_Loadgame_f (void)
 		CL_EstablishConnection ("local");
 		Host_Reconnect_f ();
 	}
+
+	if (cls.state != ca_dedicated && key_dest == key_game)
+		IN_Activate(); // moved to here from M_Load_Key()
 }
 
 //============================================================================
@@ -3017,7 +3139,7 @@ static void Host_Spawn_f (void)
 
 	MSG_WriteByte (&host_client->message, svc_signonnum);
 	MSG_WriteByte (&host_client->message, 3);
-	host_client->sendsignon = true;
+	host_client->sendsignon = PRESPAWN_FLUSH;
 }
 
 /*

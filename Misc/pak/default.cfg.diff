@@ -1,0 +1,76 @@
+--- default.cfg~
++++ default.cfg
+@@ -12,24 +12,26 @@
+ bind	ALT				+strafe
+ 
+ bind	,				+moveleft
++bind	a				+moveleft
+ bind	.				+moveright
++bind	d				+moveright
+ bind	DEL				+lookdown
+ bind	PGDN			+lookup
+ bind	END				centerview
+-bind	z				+lookdown
+-bind	a				+lookup
+ 
+-bind	d				+moveup
++bind	e				+moveup
+ bind	c				+movedown
+ bind	SHIFT			+speed
+ bind	CTRL			+attack
+ bind	UPARROW			+forward
++bind	w			+forward
+ bind	DOWNARROW		+back
++bind	s			+back
+ bind	LEFTARROW		+left
+ bind	RIGHTARROW		+right
+ 
+ bind	SPACE			+jump 
+-bind	ENTER			+jump
++//bind	ENTER			+jump
+ 
+ bind	TAB				+showscores
+ 
+@@ -45,6 +47,8 @@
+ bind	0				"impulse 0"
+ 
+ bind	/				"impulse 10"		// change weapon
++bind	MWHEELDOWN			"impulse 10"
++bind	MWHEELUP			"impulse 12"
+ 
+ // zoom
+ alias zoom_in "sensitivity 2;fov 90;wait;fov 70;wait;fov 50;wait;fov 30;wait;fov 10;wait;fov 5;bind F11 zoom_out"
+@@ -85,14 +89,30 @@
+ // mouse buttons
+ //
+ bind	MOUSE1		+attack
+-bind	MOUSE2		+forward
+-bind	MOUSE3		+mlook
++//bind	MOUSE2		+forward
++bind	MOUSE2		+jump
++//bind	MOUSE3		+mlook
++
++//
++// game controller
++//
++bind	LSHOULDER	"impulse 12"
++bind	RSHOULDER	"impulse 10"
++bind	LTRIGGER	+jump
++bind	RTRIGGER	+attack
+ 
+ //
+ // default cvars
+ //
+-viewsize 		100
+ gamma 			1.0
+ volume 			0.7
+ sensitivity 	3
+ 
++//viewsize 		100
++viewsize		110
++scr_conscale	1.6
++scr_menuscale	1.6
++scr_sbarscale	1.6
++
++// default to mouse-look enabled
+++mlook

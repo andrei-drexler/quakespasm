@@ -31,7 +31,8 @@
 
 #if defined(PLATFORM_BSD) || defined(PLATFORM_OSX)	|| \
     defined(PLATFORM_AMIGA) /* bsdsocket.library */	|| \
-    defined(__GNU__) /* GNU/Hurd */ || defined(__riscos__)
+    defined(__GNU__) /* GNU/Hurd */ || defined(__riscos__) || \
+	defined(PLATFORM_HAIKU) /* Haiku OS */
 /* struct sockaddr has unsigned char sa_len as the first member in BSD
  * variants and the family member is also an unsigned char instead of an
  * unsigned short. This should matter only when PLATFORM_UNIX is defined,
@@ -47,7 +48,7 @@
 #endif	/* BSD, sockaddr */
 
 /* unix includes and compatibility macros */
-#if defined(PLATFORM_UNIX) || defined(PLATFORM_RISCOS)
+#if defined(PLATFORM_UNIX) || defined(PLATFORM_RISCOS) || defined(PLATFORM_HAIKU)
 
 #include <sys/param.h>
 #include <sys/ioctl.h>

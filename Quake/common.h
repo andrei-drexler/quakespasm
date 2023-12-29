@@ -263,7 +263,7 @@ extern char *q_strupr (char *str);
 extern int q_snprintf (char *str, size_t size, const char *format, ...) FUNC_PRINTF(3,4);
 extern int q_vsnprintf(char *str, size_t size, const char *format, va_list args) FUNC_PRINTF(3,0);
 
-#define PLURAL(count)	(&"s"[(count)==1])
+#define PLURAL(count)	((int)(count)), (&"s"[((int)(count))==1])
 
 //============================================================================
 
@@ -280,8 +280,8 @@ const char *COM_Parse (const char *data);
 const char *COM_ParseEx (const char *data, cpe_mode mode);
 
 
-extern	int		com_argc;
-extern	char	**com_argv;
+extern	int			com_argc;
+extern	const char	**com_argv;
 
 extern	int		safemode;
 /* safe mode: in true, the engine will behave as if one
@@ -296,6 +296,10 @@ void COM_Init (void);
 void COM_InitArgv (int argc, char **argv);
 void COM_InitFilesystem (void);
 
+void COM_ResetGameDirectories (const char *newgamedirs);
+void COM_AddGameDirectory (const char *dir);
+void COM_SwitchGame (const char *paths);
+
 const char *COM_SkipPath (const char *pathname);
 void COM_StripExtension (const char *in, char *out, size_t outsize);
 void COM_FileBase (const char *in, char *out, size_t outsize);
@@ -307,6 +311,9 @@ const char *COM_FileGetExtension (const char *in); /* doesn't return NULL */
 void COM_ExtractExtension (const char *in, char *out, size_t outsize);
 char *COM_TempSuffix (unsigned seq);
 void COM_CreatePath (char *path);
+
+// Describes the given duration, e.g. "3 minutes"
+void COM_DescribeDuration (char *out, size_t outsize, double seconds);
 
 char *va (const char *format, ...) FUNC_PRINTF(1,2);
 // does a varargs printf into a temp buffer
@@ -328,8 +335,8 @@ size_t LOC_Format (const char *format, const char* (*getarg_fn)(int idx, void* u
 // Unicode
 size_t UTF8_WriteCodePoint (char *dst, size_t maxbytes, uint32_t codepoint);
 uint32_t UTF8_ReadCodePoint (const char **src);
-void UTF8_FromQuake (char *dst, size_t maxbytes, const char *src);
-void UTF8_ToQuake (char *dst, size_t maxbytes, const char *src);
+size_t UTF8_FromQuake (char *dst, size_t maxbytes, const char *src);
+size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src);
 
 #define UNICODE_UNKNOWN		0xFFFD
 #define UNICODE_MAX			0x10FFFF

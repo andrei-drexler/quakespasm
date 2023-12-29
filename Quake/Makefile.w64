@@ -1,4 +1,4 @@
-# GNU Makefile for compiling Win64 ironwail.exe using MinGW-w64.
+# GNU Makefile for compiling x64-Windows ironwail.exe using MinGW-w64.
 # Usage: "make -f Makefile.w64"
 # To cross-compile on Linux hosts, see the build_cross_win32*.sh scripts.
 # "make DEBUG=1" to build a debug client.
@@ -6,6 +6,9 @@
 
 ### Enable/disable SDL2
 USE_SDL2=1
+
+### Enable/Disable Curl
+USE_CURL=1
 
 ### Enable/disable codecs for streaming music support
 USE_CODEC_WAVE=1
@@ -32,7 +35,7 @@ check_gcc = $(shell if echo | $(CC) $(1) -Werror -S -o /dev/null -xc - > /dev/nu
 
 # ---------------------------
 
-DEBUG   ?= 0
+DEBUG ?= 0
 
 # ---------------------------
 # build variables
@@ -45,7 +48,7 @@ WINDRES = windres
 STRIP = strip
 
 CPUFLAGS=
-LDFLAGS = -m64 -mwindows -static-libgcc
+LDFLAGS?= -m64 -mwindows -static-libgcc
 DFLAGS ?=
 CFLAGS ?= -m64 -Wall -Wno-trigraphs
 CFLAGS += $(call check_gcc,-std=gnu11,)
@@ -77,18 +80,22 @@ SDL_CONFIG ?=../Windows/SDL2/bin/sdl2-config --prefix=../Windows/SDL2 --lib-suff
 else
 SDL_CONFIG ?=../Windows/SDL/bin/sdl-config --prefix=../Windows/SDL --lib-suffix=64
 endif
-SDL_CFLAGS := $(shell $(SDL_CONFIG) --cflags)
-SDL_LIBS   := $(shell $(SDL_CONFIG) --libs)
+SDL_CFLAGS = $(shell $(SDL_CONFIG) --cflags)
+SDL_LIBS   = $(shell $(SDL_CONFIG) --libs)
 
-DEFWINSOCK :=-D_USE_WINSOCK2
-LIBWINSOCK := -lws2_32
+DEFWINSOCK =-D_USE_WINSOCK2
+LIBWINSOCK = -lws2_32
 
-CFLAGS     += $(DEFWINSOCK)
-NET_LIBS   := $(LIBWINSOCK)
+CFLAGS    += $(DEFWINSOCK)
+NET_LIBS   = $(LIBWINSOCK)
 
+ifeq ($(USE_CURL),1)
 NET_LIBS   += -lcurl
 CFLAGS     += -I../Windows/curl/include
 LDFLAGS    += -L../Windows/curl/lib/x64
+else
+CFLAGS     += -DWITHOUT_CURL
+endif
 
 ifneq ($(VORBISLIB),vorbis)
 ifneq ($(VORBISLIB),tremor)
@@ -117,7 +124,7 @@ cpp_vorbisdec=-DVORBIS_USE_TREMOR
 lib_vorbisdec=-lvorbisidec -logg
 endif
 
-CODECLIBS  :=
+CODECLIBS  =
 ifeq ($(USE_CODEC_WAVE),1)
 CFLAGS+= -DUSE_CODEC_WAVE
 endif
@@ -168,9 +175,9 @@ CFLAGS+= -DUSE_CODEC_UMX
 endif
 CFLAGS+= $(CODEC_INC)
 
-COMMON_LIBS:= -lopengl32 -lwinmm -luuid -lole32
+COMMON_LIBS= -lopengl32 -lwinmm -luuid -lole32
 
-LIBS := $(COMMON_LIBS) $(NET_LIBS) $(CODEC_LINK) $(CODECLIBS)
+LIBS = $(COMMON_LIBS) $(NET_LIBS) $(CODEC_LINK) $(CODECLIBS)
 
 # name of this makefile, so we can use it as a dependency
 MAKEFILE := $(lastword $(MAKEFILE_LIST))
@@ -179,7 +186,7 @@ MAKEFILE := $(lastword $(MAKEFILE_LIST))
 # objects
 # ---------------------------
 
-MUSIC_OBJS:= bgmusic.o \
+MUSIC_OBJS= bgmusic.o \
 	snd_codec.o \
 	snd_flac.o \
 	snd_wave.o \
@@ -191,15 +198,15 @@ MUSIC_OBJS:= bgmusic.o \
 	snd_modplug.o \
 	snd_xmp.o \
 	snd_umx.o
-COMOBJ_SND := snd_dma.o snd_mix.o snd_mem.o $(MUSIC_OBJS)
-SYSOBJ_SND := snd_sdl.o
-SYSOBJ_CDA := cd_sdl.o
-SYSOBJ_INPUT := in_sdl.o
-SYSOBJ_GL_VID:= gl_vidsdl.o
-SYSOBJ_NET := net_win.o net_wins.o net_wipx.o
-SYSOBJ_SYS := pl_win.o sys_sdl_win.o
-SYSOBJ_MAIN:= main_sdl.o
-SYSOBJ_RES := QuakeSpasm.res
+COMOBJ_SND = snd_dma.o snd_mix.o snd_mem.o $(MUSIC_OBJS)
+SYSOBJ_SND = snd_sdl.o
+SYSOBJ_CDA = cd_sdl.o
+SYSOBJ_INPUT = in_sdl.o
+SYSOBJ_GL_VID= gl_vidsdl.o
+SYSOBJ_NET = net_win.o net_wins.o net_wipx.o
+SYSOBJ_SYS = pl_win.o sys_sdl_win.o
+SYSOBJ_MAIN= main_sdl.o
+SYSOBJ_RES = QuakeSpasm.res
 
 GLOBJS = \
 	gl_refrag.o \
@@ -223,7 +230,7 @@ GLOBJS = \
 	r_brush.o \
 	gl_model.o
 
-OBJS := strlcat.o \
+OBJS = strlcat.o \
 	strlcpy.o \
 	$(GLOBJS) \
 	$(SYSOBJ_INPUT) \
@@ -277,7 +284,7 @@ OBJS += $(SYSOBJ_RES)
 
 .PHONY:	clean debug release
 
-DEFAULT_TARGET := ironwail.exe
+DEFAULT_TARGET = ironwail.exe
 all: $(DEFAULT_TARGET)
 
 %.d:	%.c $(MAKEFILE)

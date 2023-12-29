@@ -250,6 +250,16 @@ cvar_t	cl_alwaysrun = {"cl_alwaysrun","1",CVAR_ARCHIVE}; // QuakeSpasm -- new al
 
 /*
 ================
+CL_InCutscene
+================
+*/
+qboolean CL_InCutscene (void)
+{
+	return cl.fixangle && !cl.viewent.model;
+}
+
+/*
+================
 CL_AdjustAngles
 
 Moves the local angle positions
@@ -260,7 +270,7 @@ void CL_AdjustAngles (void)
 	float	speed;
 	float	up, down;
 
-	if (cl.fixangle)
+	if (CL_InCutscene ())
 		return;
 
 	if ((in_speed.state & 1) ^ (cl_alwaysrun.value != 0.0))

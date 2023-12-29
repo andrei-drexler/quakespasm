@@ -912,6 +912,10 @@ void Sys_Printf (const char *fmt, ...)
 	va_end (argptr);
 
 	UTF8_FromQuake (u8text, sizeof (u8text), qtext);
+
+	// log all messages to file as well if -condebug was specified
+	Con_DebugLog (u8text);
+
 	len = MultiByteToWideChar (CP_UTF8, 0, u8text, -1, wtext, countof (wtext));
 	if (!len)
 		return;

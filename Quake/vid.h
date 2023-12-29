@@ -89,6 +89,7 @@ typedef enum
 {
 	MOUSECURSOR_DEFAULT,
 	MOUSECURSOR_HAND,
+	MOUSECURSOR_IBEAM,
 } mousecursor_t;
 
 void		*VID_GetWindow (void);

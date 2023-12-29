@@ -843,3 +843,6 @@ SDL_GameControllerGetSensorDataWithTimestamp
 SDL_SensorGetDataWithTimestamp
 SDL_ResetHints
 SDL_strcasestr
+SDL_HasWindowSurface
+SDL_DestroyWindowSurface
+

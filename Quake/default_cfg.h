@@ -1,6 +1,6 @@
 // keep in sync with Misc/qs_pak/default.cfg
 
-static char default_cfg[] =
+static const char default_cfg[] =
 "unbindall\n"
 
 "bind ALT +strafe\n"

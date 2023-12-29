@@ -163,6 +163,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	MAXCMDLINE	256
 
 typedef enum {key_game, key_console, key_message, key_menu} keydest_t;
+typedef enum textmode_t
+{
+	TEXTMODE_OFF,		// no char events
+	TEXTMODE_ON,		// char events, show on-screen keyboard
+	TEXTMODE_NOPOPUP,	// char events, don't show on-screen keyboard
+} textmode_t;
 
 extern keydest_t	key_dest;
 extern	char	*keybindings[MAX_KEYS];
@@ -187,8 +193,9 @@ void Key_EndInputGrab (void);
 void Key_GetGrabbedInput (int *lastkey, int *lastchar);
 
 void Key_Event (int key, qboolean down);
+void Key_EventWithKeycode (int key, qboolean down, int keycode);
 void Char_Event (int key);
-qboolean Key_TextEntry (void);
+textmode_t Key_TextEntry (void);
 
 void Key_SetBinding (int keynum, const char *binding);
 int Key_GetKeysForCommand (const char *command, int *keys, int maxkeys);

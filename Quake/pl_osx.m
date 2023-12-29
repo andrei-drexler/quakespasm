@@ -55,14 +55,22 @@ char *PL_GetClipboardData (void)
     if ([types containsObject: NSPasteboardTypeString]) {
 	NSString* clipboardString = [pasteboard stringForType: NSPasteboardTypeString];
 	if (clipboardString != NULL && [clipboardString length] > 0) {
-		size_t sz = [clipboardString length] + 1;
-		sz = q_min((size_t)(MAX_CLIPBOARDTXT), sz);
-		data = (char *) Z_Malloc((int)sz);
+		const char* srcdata = NULL;
+
 #if (MAC_OS_X_VERSION_MIN_REQUIRED < 1040)	/* for ppc builds targeting 10.3 and older */
-		q_strlcpy (data, [clipboardString cString], sz);
+		if ([clipboardString canBeConvertedToEncoding:NSASCIIStringEncoding])
+			srcdata = [clipboardString cString];
 #else
-		q_strlcpy (data, [clipboardString cStringUsingEncoding: NSASCIIStringEncoding], sz);
+		srcdata = [clipboardString cStringUsingEncoding: NSASCIIStringEncoding];
 #endif
+
+		if (srcdata != NULL)
+		{
+			size_t sz = [clipboardString length] + 1;
+			sz = q_min((size_t)(MAX_CLIPBOARDTXT), sz);
+			data = (char *) Z_Malloc((int)sz);
+			q_strlcpy (data, srcdata, sz);
+		}
 	}
     }
     return data;

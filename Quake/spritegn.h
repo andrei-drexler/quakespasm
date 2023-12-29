@@ -104,7 +104,7 @@ typedef struct {
 	float	interval;
 } dspriteinterval_t;
 
-typedef enum { SPR_SINGLE=0, SPR_GROUP } spriteframetype_t;
+typedef enum { SPR_SINGLE=0, SPR_GROUP, SPR_ANGLED } spriteframetype_t;
 
 typedef struct {
 	spriteframetype_t	type;

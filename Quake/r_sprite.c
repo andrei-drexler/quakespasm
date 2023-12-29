@@ -89,6 +89,19 @@ mspriteframe_t *R_GetSpriteFrame (entity_t *currentent)
 	{
 		pspriteframe = psprite->frames[frame].frameptr;
 	}
+	else if (psprite->frames[frame].type == SPR_ANGLED)
+	{
+		// erysdren - angled sprites code backported from FTEQW
+		vec3_t axis[3];
+		AngleVectors(currentent->angles, axis[0], axis[1], axis[2]);
+		{
+			float f = DotProduct(vpn, axis[0]);
+			float r = DotProduct(vright, axis[0]);
+			int dir = (atan2(r, f)+1.125*M_PI)*(4/M_PI);
+			pspritegroup = (mspritegroup_t *)psprite->frames[frame].frameptr;
+			pspriteframe = pspritegroup->frames[dir&7];
+		}
+	}
 	else
 	{
 		pspritegroup = (mspritegroup_t *)psprite->frames[frame].frameptr;
@@ -143,9 +156,9 @@ static void R_FlushSpriteInstances (void)
 	GL_UseProgram (glprogs.sprites[dither]);
 
 	if (showtris)
-		GL_SetState (GLS_BLEND_OPAQUE | GLS_NO_ZWRITE | GLS_CULL_NONE | GLS_ATTRIBS(2));
+		GL_SetState (GLS_BLEND_OPAQUE | GLS_NO_ZWRITE | GLS_CULL_BACK | GLS_ATTRIBS(2));
 	else
-		GL_SetState (GLS_BLEND_OPAQUE | GLS_CULL_NONE | GLS_ATTRIBS(2));
+		GL_SetState (GLS_BLEND_OPAQUE | GLS_CULL_BACK | GLS_ATTRIBS(2));
 
 	GL_Bind (GL_TEXTURE0, showtris ? whitetexture : batchtexture);
 

@@ -19,6 +19,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
+gyro related code is based on
+https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
+
 */
 
 #include "quakedef.h"
@@ -31,7 +34,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern cvar_t ui_mouse;
 extern cvar_t language;
 
-static qboolean	textmode;
+static qboolean windowhasfocus = true;	//just in case sdl fails to tell us...
+static textmode_t textmode = TEXTMODE_OFF;
 
 static cvar_t in_debugkeys = {"in_debugkeys", "0", CVAR_NONE};
 
@@ -61,6 +65,16 @@ cvar_t	joy_exponent_move = { "joy_exponent_move", "2", CVAR_ARCHIVE };
 cvar_t	joy_swapmovelook = { "joy_swapmovelook", "0", CVAR_ARCHIVE };
 cvar_t	joy_enable = { "joy_enable", "1", CVAR_ARCHIVE };
 
+cvar_t gyro_mode = {"gyro_mode", "0", CVAR_ARCHIVE};
+cvar_t gyro_turning_axis = {"gyro_turning_axis", "0", CVAR_ARCHIVE};
+
+cvar_t gyro_yawsensitivity = {"gyro_yawsensitivity", "2.5", CVAR_ARCHIVE};
+cvar_t gyro_pitchsensitivity= {"gyro_pitchsensitivity", "2.5", CVAR_ARCHIVE};
+
+cvar_t gyro_calibration_x = {"gyro_calibration_x", "0", CVAR_ARCHIVE};
+cvar_t gyro_calibration_y = {"gyro_calibration_y", "0", CVAR_ARCHIVE};
+cvar_t gyro_calibration_z = {"gyro_calibration_z", "0", CVAR_ARCHIVE};
+
 static SDL_JoystickID joy_active_instaceid = -1;
 static SDL_GameController *joy_active_controller = NULL;
 
@@ -77,6 +91,15 @@ static int buttonremap[] =
 
 /* total accumulated mouse movement since last frame */
 static int	total_dx, total_dy = 0;
+static float gyro_yaw, gyro_pitch = 0;
+static float gyro_dir = 1;
+
+// used for gyro calibration
+static float gyro_accum[3];
+static unsigned int num_samples;
+static unsigned int updates_countdown = 0;
+
+static qboolean gyro_active = false;
 
 static int SDLCALL IN_FilterMouseEvents (const SDL_Event *event)
 {
@@ -292,7 +315,30 @@ void IN_StartupJoystick (void)
 				
 				joy_active_instaceid = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamecontroller));
 				joy_active_controller = gamecontroller;
+
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+
+				if (SDL_GameControllerHasLED(joy_active_controller))
+					{
+						// orange LED, seemed fitting for Quake
+						SDL_GameControllerSetLED(joy_active_controller, 80, 20, 0);
+					}
+				if (SDL_GameControllerHasSensor(joy_active_controller, SDL_SENSOR_GYRO)
+						&& !SDL_GameControllerSetSensorEnabled(joy_active_controller, SDL_SENSOR_GYRO, SDL_TRUE))
+				{
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+					Con_Printf("Gyro sensor enabled at %.2f Hz\n", SDL_GameControllerGetSensorDataRate(joy_active_controller, SDL_SENSOR_GYRO));
+#else
+					Con_printf("Gyro sensor enabled.\n")
+#endif // SDL_VERSION_ATLEAST(2, 0, 16)
+				}
+				else
+				{
+					Con_Printf("Gyro sensor not found\n");
+				}
 				break;
+
+#endif // SDL_VERSION_ATLEAST(2, 0, 14)
 			}
 			else
 			{
@@ -311,11 +357,55 @@ void IN_ShutdownJoystick (void)
 	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 }
 
+void IN_GyroActionDown (void)
+{
+	switch ((int)gyro_mode.value)
+	{
+		case 1:
+			gyro_active = true;
+			return;
+		case 2:
+			gyro_active = false;
+			return;
+		case 4:
+			gyro_dir = -1;
+	}
+}
+void IN_GyroActionUp (void)
+{
+	switch ((int)gyro_mode.value)
+	{
+		case 1:
+			gyro_active = false;
+			return;
+		case 2:
+			gyro_active = true;
+			return;
+		case 4:
+			gyro_dir = 1;
+	}
+}
+
+void IN_UpdateGyroActive(cvar_t *var)
+{
+	switch ((int)var->value)
+	{
+		case 0:
+		case 1:
+			gyro_active = false;
+			return;
+		case 2:
+		case 3:
+		case 4:
+			gyro_active = true;
+	}
+}
+
 void IN_Init (void)
 {
 	textmode = Key_TextEntry();
 
-	if (textmode)
+	if (textmode == TEXTMODE_ON)
 		SDL_StartTextInput();
 	else
 		SDL_StopTextInput();
@@ -344,9 +434,28 @@ void IN_Init (void)
 	Cvar_RegisterVariable(&joy_swapmovelook);
 	Cvar_RegisterVariable(&joy_enable);
 
+	Cvar_RegisterVariable(&gyro_mode);
+	Cvar_SetCallback(&gyro_mode, IN_UpdateGyroActive);
+	Cvar_RegisterVariable(&gyro_turning_axis);
+
+	Cvar_RegisterVariable(&gyro_yawsensitivity);
+	Cvar_RegisterVariable(&gyro_pitchsensitivity);
+
+	Cvar_RegisterVariable(&gyro_calibration_x);
+	Cvar_RegisterVariable(&gyro_calibration_y);
+	Cvar_RegisterVariable(&gyro_calibration_z);
+
+	Cmd_AddCommand ("+gyroaction", IN_GyroActionDown);
+	Cmd_AddCommand ("-gyroaction", IN_GyroActionUp);
+
 	IN_Activate();
 	IN_StartupJoystick();
 	Sys_ActivateKeyFilter(true);
+
+	if ((int)gyro_mode.value == 2)
+	{
+		gyro_active = true;
+	}
 }
 
 void IN_Shutdown (void)
@@ -363,7 +472,9 @@ extern cvar_t scr_fov;
 
 void IN_MouseMotion(int dx, int dy)
 {
-	if (cls.state != ca_connected || cls.signon != SIGNONS || key_dest != key_game || cl.fixangle)
+	if (!windowhasfocus)
+		dx = dy = 0;	//don't change view angles etc while unfocused.
+	if (cls.state != ca_connected || cls.signon != SIGNONS || key_dest != key_game || CL_InCutscene ())
 	{
 		total_dx = 0;
 		total_dy = 0;
@@ -507,6 +618,9 @@ Adapted from DarkPlaces by lordhavoc
 */
 static void IN_JoyKeyEvent(qboolean wasdown, qboolean isdown, int key, double *timer)
 {
+	static const double repeatdelay = 0.5; // time (in seconds) between initial press and first repetition
+	static const double repeatrate = 32.0; // ticks per second
+
 	// we can't use `realtime` for key repeats because it is not monotomic
 	const double currenttime = Sys_DoubleTime();
 	
@@ -516,7 +630,7 @@ static void IN_JoyKeyEvent(qboolean wasdown, qboolean isdown, int key, double *t
 		{
 			if (currenttime >= *timer)
 			{
-				*timer = currenttime + 0.1;
+				*timer = currenttime + 1.0 / repeatrate;
 				Key_Event(key, true);
 			}
 		}
@@ -530,7 +644,7 @@ static void IN_JoyKeyEvent(qboolean wasdown, qboolean isdown, int key, double *t
 	{
 		if (isdown)
 		{
-			*timer = currenttime + 0.5;
+			*timer = currenttime + repeatdelay;
 			Key_Event(key, true);
 		}
 	}
@@ -576,12 +690,49 @@ void IN_Commands (void)
 	// emit emulated arrow keys so the analog sticks can be used in the menu
 	if (key_dest != key_game)
 	{
-		IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTX] < -stickthreshold, newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTX] < -stickthreshold, K_LEFTARROW, &joy_emulatedkeytimer[0]);
-		IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTX] > stickthreshold,  newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTX] > stickthreshold, K_RIGHTARROW, &joy_emulatedkeytimer[1]);
-		IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTY] < -stickthreshold, newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTY] < -stickthreshold, K_UPARROW, &joy_emulatedkeytimer[2]);
-		IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTY] > stickthreshold,  newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_LEFTY] > stickthreshold, K_DOWNARROW, &joy_emulatedkeytimer[3]);
+		int xaxis = joy_swapmovelook.value ? SDL_CONTROLLER_AXIS_RIGHTX : SDL_CONTROLLER_AXIS_LEFTX;
+		int yaxis = joy_swapmovelook.value ? SDL_CONTROLLER_AXIS_RIGHTY : SDL_CONTROLLER_AXIS_LEFTY;
+		IN_JoyKeyEvent(joy_axisstate.axisvalue[xaxis] < -stickthreshold, newaxisstate.axisvalue[xaxis] < -stickthreshold, K_LEFTARROW, &joy_emulatedkeytimer[0]);
+		IN_JoyKeyEvent(joy_axisstate.axisvalue[xaxis] > stickthreshold,  newaxisstate.axisvalue[xaxis] > stickthreshold, K_RIGHTARROW, &joy_emulatedkeytimer[1]);
+		IN_JoyKeyEvent(joy_axisstate.axisvalue[yaxis] < -stickthreshold, newaxisstate.axisvalue[yaxis] < -stickthreshold, K_UPARROW, &joy_emulatedkeytimer[2]);
+		IN_JoyKeyEvent(joy_axisstate.axisvalue[yaxis] > stickthreshold,  newaxisstate.axisvalue[yaxis] > stickthreshold, K_DOWNARROW, &joy_emulatedkeytimer[3]);
 	}
-	
+
+	// scroll console with look stick
+	if (key_dest == key_console)
+	{
+		const float scrollthreshold = 0.1f;
+		const float maxscrollspeed = 72.f; // lines per second
+		const float scrollinterval = 1.f / maxscrollspeed; 
+		static double timer = 0.0;
+		joyaxis_t raw, deadzone, eased;
+		float scale;
+
+		raw.x = newaxisstate.axisvalue[joy_swapmovelook.value ? SDL_CONTROLLER_AXIS_LEFTX : SDL_CONTROLLER_AXIS_RIGHTX];
+		raw.y = newaxisstate.axisvalue[joy_swapmovelook.value ? SDL_CONTROLLER_AXIS_LEFTY : SDL_CONTROLLER_AXIS_RIGHTY];
+		deadzone = IN_ApplyDeadzone (raw, joy_deadzone_look.value, joy_outer_threshold_look.value);
+		eased = IN_ApplyEasing (deadzone, joy_exponent.value);
+		if (joy_invert.value)
+			eased.y = -eased.y;
+
+		scale = fabs (eased.y);
+		if (scale > scrollthreshold)
+		{
+			scale = (scale - scrollthreshold) / (1.f - scrollthreshold);
+			timer -= scale * host_rawframetime;
+			if (timer < 0.0)
+			{
+				int ticks = (int) ceil (-timer / scrollinterval);
+				timer += ticks * scrollinterval;
+				Con_Scroll (eased.y < 0.0f ? ticks : -ticks);
+			}
+		}
+		else
+		{
+			timer = 0.0;
+		}
+	}
+
 	// emit emulated keys for the analog triggers
 	IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_TRIGGERLEFT] > triggerthreshold,  newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_TRIGGERLEFT] > triggerthreshold, K_LTRIGGER, &joy_emulatedkeytimer[4]);
 	IN_JoyKeyEvent(joy_axisstate.axisvalue[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] > triggerthreshold, newaxisstate.axisvalue[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] > triggerthreshold, K_RTRIGGER, &joy_emulatedkeytimer[5]);
@@ -641,7 +792,7 @@ void IN_JoyMove (usercmd_t *cmd)
 	cmd->sidemove += speed * moveEased.x;
 	cmd->forwardmove -= speed * moveEased.y;
 
-	if (cl.fixangle)
+	if (CL_InCutscene ())
 		return;
 
 	cl.viewangles[YAW] -= lookEased.x * joy_sensitivity_yaw.value * host_frametime;
@@ -649,6 +800,32 @@ void IN_JoyMove (usercmd_t *cmd)
 
 	if (lookEased.x != 0 || lookEased.y != 0)
 		V_StopPitchDrift();
+
+	/* johnfitz -- variable pitch clamping */
+	if (cl.viewangles[PITCH] > cl_maxpitch.value)
+		cl.viewangles[PITCH] = cl_maxpitch.value;
+	if (cl.viewangles[PITCH] < cl_minpitch.value)
+		cl.viewangles[PITCH] = cl_minpitch.value;
+}
+
+void IN_GyroMove(usercmd_t *cmd)
+{
+	float scale;
+	if (!joy_enable.value)
+		return;
+
+	if (!joy_active_controller)
+		return;
+
+	if (cl.paused || key_dest != key_game)
+		return;
+
+	if (CL_InCutscene ())
+		return;
+
+	scale = (180.f / M_PI) * gyro_dir * host_frametime;
+	cl.viewangles[YAW] += scale * gyro_yaw * gyro_yawsensitivity.value;
+	cl.viewangles[PITCH] -= scale * gyro_pitch * gyro_pitchsensitivity.value;
 
 	/* johnfitz -- variable pitch clamping */
 	if (cl.viewangles[PITCH] > cl_maxpitch.value)
@@ -704,6 +881,7 @@ void IN_MouseMove(usercmd_t *cmd)
 void IN_Move(usercmd_t *cmd)
 {
 	IN_JoyMove(cmd);
+	IN_GyroMove(cmd);
 	IN_MouseMove(cmd);
 }
 
@@ -713,11 +891,11 @@ void IN_ClearStates (void)
 
 void IN_UpdateInputMode (void)
 {
-	qboolean want_textmode = Key_TextEntry();
+	textmode_t want_textmode = Key_TextEntry();
 	if (textmode != want_textmode)
 	{
 		textmode = want_textmode;
-		if (textmode)
+		if (textmode == TEXTMODE_ON)
 		{
 			SDL_StartTextInput();
 			if (in_debugkeys.value)
@@ -730,6 +908,11 @@ void IN_UpdateInputMode (void)
 				Con_Printf("SDL_StopTextInput time: %g\n", Sys_DoubleTime());
 		}
 	}
+}
+
+textmode_t IN_GetTextMode (void)
+{
+	return textmode;
 }
 
 static inline int IN_SDL2_ScancodeToQuakeKey(SDL_Scancode scancode)
@@ -873,6 +1056,45 @@ static void IN_DebugKeyEvent(SDL_Event *event)
 		Sys_DoubleTime());
 }
 
+void IN_StartGyroCalibration (void)
+{
+	Con_Printf ("Calibrating, please wait...\n");
+
+	gyro_accum[0] = 0.0;
+	gyro_accum[1] = 0.0;
+	gyro_accum[2] = 0.0;
+
+	num_samples = 0;
+	updates_countdown = 300;
+}
+
+static void IN_UpdateGyroCalibration (void)
+{
+	if (!updates_countdown)
+		return;
+
+	updates_countdown--;
+	if (!updates_countdown)
+	{
+		const float inverseSamples = 1.f / num_samples;
+		Cvar_SetValue("gyro_calibration_x", gyro_accum[0] * inverseSamples);
+		Cvar_SetValue("gyro_calibration_y", gyro_accum[1] * inverseSamples);
+		Cvar_SetValue("gyro_calibration_z", gyro_accum[2] * inverseSamples);
+
+		Con_Printf("Calibration results:\n X=%f Y=%f Z=%f\n",
+			gyro_calibration_x.value,
+			gyro_calibration_y.value,
+			gyro_calibration_z.value);
+
+		Con_Printf("Calibration finished\n");
+	}
+}
+
+qboolean IN_IsCalibratingGyro (void)
+{
+	return updates_countdown != 0;
+}
+
 void IN_SendKeyEvents (void)
 {
 	SDL_Event event;
@@ -887,10 +1109,12 @@ void IN_SendKeyEvents (void)
 			if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
 			{
 				Sys_ActivateKeyFilter(true);
+				windowhasfocus = true;
 				S_UnblockSound();
 			}
 			else if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
 			{
+				windowhasfocus = false;
 				S_BlockSound();
 				Sys_ActivateKeyFilter(false);
 			}
@@ -923,13 +1147,15 @@ void IN_SendKeyEvents (void)
 		// SDL2: we interpret the keyboard as the US layout, so keybindings
 		// are based on key position, not the label on the key cap.
 			key = IN_SDL2_ScancodeToQuakeKey(event.key.keysym.scancode);
-			Key_Event (key, down);
+
+		// also pass along the underlying keycode using the proper current layout for Y/N prompts.
+			Key_EventWithKeycode (key, down, event.key.keysym.sym);
 			break;
 
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
 			if (event.button.button < 1 ||
-			    event.button.button > sizeof(buttonremap) / sizeof(buttonremap[0]))
+			    event.button.button > Q_COUNTOF(buttonremap))
 			{
 				Con_Printf ("Ignored event for mouse button %d\n",
 							event.button.button);
@@ -959,6 +1185,40 @@ void IN_SendKeyEvents (void)
 			IN_MouseMotion(event.motion.xrel, event.motion.yrel);
 			break;
 
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+		case SDL_CONTROLLERSENSORUPDATE:
+			if (event.csensor.sensor != SDL_SENSOR_GYRO)
+			{
+				break;
+			}
+			if (updates_countdown)
+			{
+				gyro_accum[0] += event.csensor.data[0];
+				gyro_accum[1] += event.csensor.data[1];
+				gyro_accum[2] += event.csensor.data[2];
+				num_samples++;
+				break;
+			}
+			if (gyro_active && gyro_mode.value)
+			{
+				if (!gyro_turning_axis.value)
+				{
+					gyro_yaw = event.csensor.data[1] - gyro_calibration_y.value; // yaw
+				}
+				else
+				{
+					gyro_yaw = -(event.csensor.data[2] - gyro_calibration_z.value); // roll
+				}
+				gyro_pitch = event.csensor.data[0] - gyro_calibration_x.value;
+			}
+			else
+			{
+				gyro_yaw = gyro_pitch = 0;
+			}
+			break;
+
+#endif // SDL_VERSION_ATLEAST(2, 0, 14)
+
 		case SDL_CONTROLLERDEVICEADDED:
 			if (joy_active_instaceid == -1)
 			{
@@ -970,6 +1230,11 @@ void IN_SendKeyEvents (void)
 					SDL_Joystick *joy;
 					joy = SDL_GameControllerGetJoystick(joy_active_controller);
 					joy_active_instaceid = SDL_JoystickInstanceID(joy);
+					if (SDL_GameControllerHasLED(joy_active_controller))
+						{
+							// orange LED, seemed fitting for Quake
+							SDL_GameControllerSetLED(joy_active_controller, 80, 20, 0);
+						}
 				}
 			}
 			else
@@ -1004,5 +1269,7 @@ void IN_SendKeyEvents (void)
 			break;
 		}
 	}
+
+	IN_UpdateGyroCalibration ();
 }
 

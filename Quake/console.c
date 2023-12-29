@@ -34,6 +34,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <unistd.h>
 #endif
 
+extern qboolean	keydown[256];
+
 int 		con_linewidth;
 
 float		con_cursorspeed = 4;
@@ -65,8 +67,37 @@ typedef struct
 	conofs_t	end;
 } conlink_t;
 
+typedef struct
+{
+	conofs_t		begin;
+	conofs_t		end;
+} conselection_t;
+
+typedef enum
+{
+	// Used for link hover/clicking:
+	// - picks the character that contains the cursor
+	// - rejects areas outside the visible console region
+	CT_INSIDE,
+
+	// Used for text selection:
+	// - picks the closest edge horizontally, on whichever line contains the cursor vertically
+	// - clamps to the margins of the visible console region
+	CT_NEAREST,
+} contest_t;		// Console hit testing mode
+
+typedef enum
+{
+	CMS_NOTPRESSED,
+	CMS_PRESSED,
+	CMS_DRAGGING,
+} conmouse_t;
+
 static conlink_t	**con_links = NULL;
 static conlink_t	*con_hotlink = NULL;
+
+static conmouse_t		con_mousestate = CMS_NOTPRESSED;
+static conselection_t	con_selection;
 
 cvar_t		con_notifytime = {"con_notifytime","3",CVAR_NONE};	//seconds
 cvar_t		con_logcenterprint = {"con_logcenterprint", "1", CVAR_NONE}; //johnfitz
@@ -82,9 +113,53 @@ double		con_times[NUM_CON_TIMES];	// realtime time the line was generated
 
 int			con_vislines;
 
-qboolean	con_debuglog = false;
-
 qboolean	con_initialized;
+
+
+/*
+================
+Con_GetLine
+================
+*/
+static const char *Con_GetLine (int line)
+{
+	return con_text + (line%con_totallines)*con_linewidth;
+}
+
+/*
+================
+Con_StrLen
+================
+*/
+static size_t Con_StrLen (int line)
+{
+	const char *text = Con_GetLine (line);
+	size_t len = con_linewidth;
+	while (len > 0 && (char)(text[len - 1] & 0x7f) == ' ')
+		len--;
+	return len;
+}
+
+static void Con_ScreenToCanvas (int x, int y, int *outx, int *outy)
+{
+	drawtransform_t	transform;
+	float			px, py;
+
+	// screen space to [-1..1]
+	px = (x - glx) * 2.f / (float) glwidth - 1.f;
+	py = (y - gly) * 2.f / (float) glheight - 1.f;
+	py = -py;
+
+	// [-1..1] to console canvas
+	Draw_GetCanvasTransform (CANVAS_CONSOLE, &transform);
+	px = (px - transform.offset[0]) / transform.scale[0];
+	py = (py - transform.offset[1]) / transform.scale[1];
+	x = (int) (px + 0.5f);
+	y = (int) (py + 0.5f);
+
+	*outx = x;
+	*outy = y;
+}
 
 
 /*
@@ -95,25 +170,18 @@ Converts screen (pixel) coordinates to a console offset
 Returns true if the offset is inside the visible portion of the console
 ================
 */
-static qboolean Con_ScreenToOffset (int x, int y, conofs_t *ofs)
+static qboolean Con_ScreenToOffset (int x, int y, conofs_t *ofs, contest_t testmode)
 {
-	drawtransform_t	transform;
-	float			px, py;
-	qboolean		ret = true;
+	qboolean ret = true;
 
-// screen space to [-1..1]
-	px = (x - glx) * 2.f / (float) glwidth - 1.f;
-	py = (y - gly) * 2.f / (float) glheight - 1.f;
-	py = -py;
-	
-// [-1..1] to console canvas
-	Draw_GetCanvasTransform (CANVAS_CONSOLE, &transform);
-	px = (px - transform.offset[0]) / transform.scale[0];
-	py = (py - transform.offset[1]) / transform.scale[1];
-	x = (int) (px + 0.5f);
-	y = (int) (py + 0.5f);
+	Con_ScreenToCanvas (x, y, &x, &y);
 
+// Start from the bottom of the console
 	y = vid.conheight - y;
+
+// Apply rounding
+	if (testmode == CT_NEAREST)
+		x += 4;
 
 // pixels to characters
 	x >>= 3;
@@ -122,12 +190,36 @@ static qboolean Con_ScreenToOffset (int x, int y, conofs_t *ofs)
 // apply margins and scrolling
 	x -= CON_MARGIN;
 	y -= 2;
-	if (x < 0 || x >= con_linewidth)
-		ret = false;
-	if (y < 0 || y >= con_vislines)
-		ret = false;
-	if (con_backscroll && y < 2)
-		ret = false;
+
+	if (testmode == CT_INSIDE)
+	{
+		if (x < 0 || x >= con_linewidth)
+			ret = false;
+		if (y < 0 || y >= con_vislines)
+			ret = false;
+		if (con_backscroll && y < 2)
+			ret = false;
+	}
+	else
+	{
+		// Allow the cursor to move one character past the end of the line
+		// by clamping to con_linewidth instead of con_linewidth - 1
+		x = CLAMP (0, x, con_linewidth);
+
+		// Enable selecting the entire bottom line by allowing the cursor
+		// to move to the beginning of the line below it (line -1)
+		y = CLAMP (-1, y, con_vislines);
+		if (y < 0)
+			x = 0;
+
+		// Enable selecting the entire line above the backscroll cutoff by
+		// allowing the cursor to move to the beginning of the line below it
+		if (con_backscroll && y < 2)
+		{
+			x = 0;
+			y = 1;
+		}
+	}
 
 	y += con_backscroll;
 	y = con_current - y;
@@ -162,6 +254,39 @@ Checks if an offset is within a half-open range
 static qboolean Con_OfsInRange (const conofs_t *ofs, const conofs_t *begin, const conofs_t *end)
 {
 	return Con_OfsCompare (ofs, begin) >= 0 && Con_OfsCompare (ofs, end) < 0;
+}
+
+/*
+================
+Con_GetCurrentRange
+================
+*/
+static void Con_GetCurrentRange (conofs_t *begin, conofs_t *end)
+{
+	begin->line = con_current - con_totallines + 1;
+	begin->col = 0;
+	end->line = con_current + 1;
+	end->col = 0;
+}
+
+/*
+================
+Con_IntersectRanges
+================
+*/
+static qboolean Con_IntersectRanges (conofs_t *begin, conofs_t *end, const conofs_t *selbegin, const conofs_t *selend)
+{
+	if (Con_OfsCompare (selend, begin) <= 0)
+		return false;
+	if (Con_OfsCompare (end, selbegin) <= 0)
+		return false;
+
+	if (Con_OfsCompare (begin, selbegin) < 0)
+		*begin = *selbegin;
+	if (Con_OfsCompare (selend, end) < 0)
+		*end = *selend;
+
+	return true;
 }
 
 /*
@@ -206,7 +331,7 @@ Returns the link at the given pixel coordinates, if any, or NULL otherwise
 static conlink_t *Con_GetLinkAtPixel (int x, int y)
 {
 	conofs_t ofs;
-	if (!Con_ScreenToOffset (x, y, &ofs))
+	if (!Con_ScreenToOffset (x, y, &ofs, CT_INSIDE))
 		return NULL;
 	return Con_GetLinkAtOfs (&ofs);
 }
@@ -223,7 +348,6 @@ static void Con_SetHotLink (conlink_t *link)
 	if (link == con_hotlink)
 		return;
 	con_hotlink = link;
-	VID_SetMouseCursor (con_hotlink ? MOUSECURSOR_HAND : MOUSECURSOR_DEFAULT);
 }
 
 /*
@@ -234,11 +358,11 @@ Computes the console offset corresponding to the current mouse position
 Returns true if the offset is inside the visible portion of the console
 ================
 */
-static qboolean Con_GetMousePos (conofs_t *ofs)
+static qboolean Con_GetMousePos (conofs_t *ofs, contest_t testmode)
 {
 	int x, y;
 	SDL_GetMouseState (&x, &y);
-	return Con_ScreenToOffset (x, y, ofs);
+	return Con_ScreenToOffset (x, y, ofs, testmode);
 }
 
 /*
@@ -251,9 +375,89 @@ Returns the link at the current mouse position, if any, or NULL otherwise
 static conlink_t *Con_GetMouseLink (void)
 {
 	conofs_t ofs;
-	if (Con_GetMousePos (&ofs))
+	if (Con_GetMousePos (&ofs, CT_INSIDE))
 		return Con_GetLinkAtOfs (&ofs);
 	return NULL;
+}
+
+/*
+================
+Con_ClearSelection
+================
+*/
+static void Con_ClearSelection (void)
+{
+	memset (&con_selection, 0, sizeof (con_selection));
+}
+
+/*
+================
+Con_HasSelection
+================
+*/
+static qboolean Con_HasSelection (void)
+{
+	return Con_OfsCompare (&con_selection.begin, &con_selection.end) != 0;
+}
+
+/*
+================
+Con_GetNormalizedSelection
+================
+*/
+static qboolean Con_GetNormalizedSelection (conofs_t *begin, conofs_t *end)
+{
+	conofs_t	*selbegin = &con_selection.begin;
+	conofs_t	*selend = &con_selection.end;
+	conofs_t	tbegin, tend;
+
+	if (Con_OfsCompare (selbegin, selend) > 0)
+	{
+		conofs_t *tmp = selbegin;
+		selbegin = selend;
+		selend = tmp;
+	}
+	*begin = *selbegin;
+	*end = *selend;
+
+	Con_GetCurrentRange (&tbegin, &tend);
+
+	return Con_IntersectRanges (begin, end, &tbegin, &tend);
+}
+
+/*
+================
+Con_SetMouseState
+================
+*/
+static void Con_SetMouseState (conmouse_t state)
+{
+	if (con_mousestate == state)
+		return;
+
+	switch (state)
+	{
+	case CMS_PRESSED:
+		Con_GetMousePos (&con_selection.begin, CT_NEAREST);
+		con_selection.end = con_selection.begin;
+		break;
+
+	case CMS_DRAGGING:
+		Con_SetHotLink (NULL);
+		VID_SetMouseCursor (MOUSECURSOR_IBEAM);
+		break;
+
+	case CMS_NOTPRESSED:
+		if (con_mousestate != CMS_DRAGGING && con_hotlink && !Sys_Explore (con_hotlink->path))
+			S_LocalSound ("misc/menu2.wav");
+		break;
+
+	default:
+		break;
+	}
+
+	con_mousestate = state;
+	Con_ForceMouseMove ();
 }
 
 /*
@@ -264,21 +468,50 @@ Mouse movement callback
 */
 void Con_Mousemove (int x, int y)
 {
-	Con_SetHotLink (Con_GetLinkAtPixel (x, y));
+	if (con_mousestate == CMS_NOTPRESSED)
+	{
+		Con_SetHotLink (Con_GetLinkAtPixel (x, y));
+		VID_SetMouseCursor (con_hotlink ? MOUSECURSOR_HAND : MOUSECURSOR_DEFAULT);
+	}
+	else
+	{
+		Con_ScreenToOffset (x, y, &con_selection.end, CT_NEAREST);
+		if (Con_OfsCompare (&con_selection.begin, &con_selection.end) != 0)
+			Con_SetMouseState (CMS_DRAGGING);
+	}
 }
 
 /*
 ================
-Con_Click
-
-Mouse click callback
+Con_ForceMouseMove
 ================
 */
-void Con_Click (void)
+void Con_ForceMouseMove (void)
 {
-	conlink_t *link = Con_GetMouseLink ();
-	if (link && !Sys_Explore (link->path))
-		S_LocalSound ("misc/menu2.wav");
+	int x, y;
+	SDL_GetMouseState (&x, &y);
+	Con_Mousemove (x, y);
+}
+
+/*
+================
+Con_UpdateMouseState
+================
+*/
+static void Con_UpdateMouseState (void)
+{
+	if (key_dest != key_console)
+	{
+		Con_SetHotLink (NULL);
+		Con_SetMouseState (CMS_NOTPRESSED);
+		Con_ClearSelection ();
+		return;
+	}
+
+	if (!keydown[K_MOUSE1])
+		Con_SetMouseState (CMS_NOTPRESSED);
+	else if (con_mousestate == CMS_NOTPRESSED)
+		Con_SetMouseState (CMS_PRESSED);
 }
 
 /*
@@ -368,6 +601,56 @@ static void Con_Clear_f (void)
 	for (i = 0; i < VEC_SIZE (con_links); i++)
 		free (con_links[i]);
 	VEC_CLEAR (con_links);
+}
+
+/*
+================
+Con_CopySelectionToClipboard
+================
+*/
+qboolean Con_CopySelectionToClipboard (void)
+{
+	conofs_t selbegin, selend;
+	conofs_t cursor, eol;
+	char *qtext = NULL;
+	char *utf8 = NULL;
+	size_t maxsize;
+
+	S_LocalSound ("misc/menu2.wav");
+
+	// Get forward selection range
+	if (!Con_GetNormalizedSelection (&selbegin, &selend))
+		return false;
+
+	// Iterate through all lines in the selection
+	for (cursor = selbegin; Con_OfsCompare (&cursor, &selend) <= 0; cursor.line++, cursor.col = 0)
+	{
+		const char *text = Con_GetLine (cursor.line);
+		eol.line = cursor.line;
+		eol.col = Con_StrLen (cursor.line);
+		if (cursor.line == selend.line)
+			eol.col = q_min (eol.col, selend.col);
+		Vec_Append ((void **)&qtext, 1, text + cursor.col, eol.col - cursor.col);
+		if (eol.line != selend.line)
+			VEC_PUSH (qtext, '\n');
+	}
+	VEC_PUSH (qtext, '\0');
+
+	// Convert to UTF-8
+	maxsize = UTF8_FromQuake (NULL, 0, qtext);
+	utf8 = (char *) malloc (maxsize);
+	UTF8_FromQuake (utf8, maxsize, qtext);
+
+	// Copy the UTF-8 text to clipboard
+	SDL_SetClipboardText (utf8);
+
+	// Clean up temporary buffers
+	free (utf8);
+	VEC_FREE (qtext);
+
+	Con_ClearSelection ();
+
+	return true;
 }
 
 /*
@@ -538,6 +821,33 @@ void Con_CheckResize (void)
 
 	con_backscroll = 0;
 	con_current = con_totallines - 1;
+}
+
+
+/*
+================
+Con_Scroll
+================
+*/
+void Con_Scroll (int lines)
+{
+	if (!lines)
+		return;
+
+	con_backscroll += lines;
+
+	if (lines > 0)
+	{
+		if (con_backscroll > con_totallines - (vid.height>>3) - 1)
+			con_backscroll = con_totallines - (vid.height>>3) - 1;
+	}
+	else
+	{
+		if (con_backscroll < 0)
+			con_backscroll = 0;
+	}
+
+	Con_ForceMouseMove ();
 }
 
 
@@ -716,6 +1026,10 @@ static int	log_fd = -1;			// log file descriptor
 /*
 ================
 Con_DebugLog
+
+Writes msg to log if -condebug was specified on the command line
+
+Note: msg is expected to be in UTF-8, not Quake charset
 ================
 */
 void Con_DebugLog(const char *msg)
@@ -723,7 +1037,31 @@ void Con_DebugLog(const char *msg)
 	if (log_fd == -1)
 		return;
 
-	write(log_fd, msg, strlen(msg));
+	if (write(log_fd, msg, strlen(msg)) < 0)
+	{
+		close (log_fd);
+		log_fd = -1;
+		fprintf (stderr, "Error writing to log file\n");
+	}
+}
+
+
+/*
+================
+Con_StripControlPrefixes
+================
+*/
+static const char *Con_StripControlPrefixes (const char *txt)
+{
+	// colored text
+	if (txt[0] == 1 || txt[0] == 2)
+		txt++;
+
+	// [skipnotify]
+	if (!Q_strncmp (txt, "[skipnotify]", 12))
+		txt += 12;
+
+	return txt;
 }
 
 
@@ -746,11 +1084,7 @@ void Con_Printf (const char *fmt, ...)
 	va_end (argptr);
 
 // also echo to debugging console
-	Sys_Printf ("%s", msg);
-
-// log all messages to file
-	if (con_debuglog)
-		Con_DebugLog(msg);
+	Sys_Printf ("%s", Con_StripControlPrefixes (msg));
 
 	if (!con_initialized)
 		return;
@@ -1026,7 +1360,6 @@ typedef struct tab_s
 tab_t	*tablist;
 
 //defs from elsewhere
-extern qboolean	keydown[256];
 extern	cmd_function_t	*cmd_functions;
 #define	MAX_ALIAS_NAME	32
 typedef struct cmdalias_s
@@ -1293,8 +1626,7 @@ static const arg_completion_type_t arg_completion_types[] =
 	{ "unbind",					CompleteUnbindKeys,		NULL },
 };
 
-static const int num_arg_completion_types =
-	sizeof(arg_completion_types)/sizeof(arg_completion_types[0]);
+static const int num_arg_completion_types = Q_COUNTOF(arg_completion_types);
 
 /*
 ============
@@ -1672,6 +2004,39 @@ void Con_DrawInput (void)
 
 /*
 ================
+Con_DrawSelectionHighlight
+================
+*/
+void Con_DrawSelectionHighlight (int x, int y, int line)
+{
+	conofs_t	selbegin, selend;
+	conofs_t	begin, end;
+	size_t		len;
+
+	if (!Con_GetNormalizedSelection (&selbegin, &selend))
+		return;
+
+	len = Con_StrLen (line);
+	begin.line = line;
+	begin.col = 0;
+	end.line = line;
+	end.col = len;
+
+	if (!Con_IntersectRanges (&begin, &end, &selbegin, &selend))
+		return;
+
+	// Highlight line ends (as in Notepad, Visual Studio etc.)
+	if (end.line != selend.line && end.col == len)
+		end.col++;
+
+	// ...unless we would end up overlapping the console margin
+	end.col = q_min (end.col, con_linewidth);
+
+	Draw_Fill (x + begin.col*8, y, (end.col-begin.col)*8, 8, 220, 1.f);
+}
+
+/*
+================
 Con_DrawConsole -- johnfitz -- heavy revision
 
 Draws the console with the solid background
@@ -1682,6 +2047,8 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 {
 	int	i, x, y, j, sb, rows;
 	const char	*text;
+
+	Con_UpdateMouseState ();
 
 	if (lines <= 0)
 		return;
@@ -1698,6 +2065,16 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 	rows -= 2; //for input and version lines
 	sb = (con_backscroll) ? 2 : 0;
 
+	for (i = con_current - rows + 1; i <= con_current - sb; i++, y += 8)
+	{
+		j = i - con_backscroll;
+		if (j < 0)
+			j = 0;
+		text = con_text + (j % con_totallines)*con_linewidth;
+		Con_DrawSelectionHighlight (8, y, j);
+	}
+
+	y = vid.conheight - (rows+2)*8; // +2 for input and version lines
 	for (i = con_current - rows + 1; i <= con_current - sb; i++, y += 8)
 	{
 		conofs_t ofs;
@@ -1800,7 +2177,6 @@ void LOG_Init (quakeparms_t *parms)
 		return;
 	}
 
-	con_debuglog = true;
 	Con_DebugLog (va("LOG started on: %s \n", session));
 
 }

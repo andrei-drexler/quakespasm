@@ -67,6 +67,7 @@ static SDL_Window	*draw_context;
 static SDL_GLContext	gl_context;
 static SDL_Cursor		*cursor_arrow;
 static SDL_Cursor		*cursor_hand;
+static SDL_Cursor		*cursor_ibeam;
 
 static qboolean	vid_locked = false; //johnfitz
 static qboolean vid_changed = false;
@@ -181,14 +182,17 @@ static void VID_InitMouseCursors (void)
 {
 	cursor_arrow = SDL_CreateSystemCursor (SDL_SYSTEM_CURSOR_ARROW);
 	cursor_hand = SDL_CreateSystemCursor (SDL_SYSTEM_CURSOR_HAND);
+	cursor_ibeam = SDL_CreateSystemCursor (SDL_SYSTEM_CURSOR_IBEAM);
 }
 
 static void VID_FreeMouseCursors (void)
 {
 	SDL_FreeCursor (cursor_arrow);
 	SDL_FreeCursor (cursor_hand);
+	SDL_FreeCursor (cursor_ibeam);
 	cursor_arrow = NULL;
 	cursor_hand = NULL;
+	cursor_ibeam = NULL;
 }
 
 void VID_SetMouseCursor (mousecursor_t cursor)
@@ -201,6 +205,10 @@ void VID_SetMouseCursor (mousecursor_t cursor)
 
 	case MOUSECURSOR_HAND:
 		SDL_SetCursor (cursor_hand);
+		return;
+
+	case MOUSECURSOR_IBEAM:
+		SDL_SetCursor (cursor_ibeam);
 		return;
 
 	default:
@@ -771,7 +779,7 @@ VID_Test -- johnfitz -- like vid_restart, but asks for confirmation after switch
 */
 static void VID_Test (void)
 {
-	int old_width, old_height, old_refreshrate, old_bpp, old_fullscreen;
+	int old_width, old_height, old_refreshrate, old_fullscreen;
 
 	if (vid_locked || !vid_changed)
 		return;
@@ -781,7 +789,6 @@ static void VID_Test (void)
 	old_width = VID_GetCurrentWidth();
 	old_height = VID_GetCurrentHeight();
 	old_refreshrate = VID_GetCurrentRefreshRate();
-	old_bpp = VID_GetCurrentBPP();
 	old_fullscreen = VID_GetFullscreen() ? true : false;
 
 	VID_Restart ();
@@ -1280,10 +1287,10 @@ static void GL_Init (void)
 	gl_version = (const char *) glGetString (GL_VERSION);
 	glGetIntegerv (GL_NUM_EXTENSIONS, &gl_num_extensions);
 
-	Con_SafePrintf ("GL_VENDOR: %s\n", gl_vendor);
+	Con_SafePrintf ("GL_VENDOR:   %s\n", gl_vendor);
 	Con_SafePrintf ("GL_RENDERER: %s\n", gl_renderer);
-	Con_SafePrintf ("GL_VERSION: %s\n", gl_version);
-	
+	Con_SafePrintf ("GL_VERSION:  %s\n", gl_version);
+
 	if (gl_version == NULL || sscanf(gl_version, "%d.%d", &gl_version_major, &gl_version_minor) < 2)
 	{
 		gl_version_major = 0;
@@ -1412,6 +1419,10 @@ void	VID_Shutdown (void)
 	if (vid_initialized)
 	{
 		VID_FreeMouseCursors();
+		SDL_GL_DeleteContext(gl_context);
+		gl_context = NULL;
+		SDL_DestroyWindow(draw_context);
+		draw_context = NULL;
 		SDL_QuitSubSystem(SDL_INIT_VIDEO);
 		draw_context = NULL;
 		gl_context = NULL;
@@ -1585,7 +1596,7 @@ void	VID_Init (void)
 {
 	static char vid_center[] = "SDL_VIDEO_CENTERED=center";
 	int		p, width, height, refreshrate;
-	int		display_width, display_height, display_refreshrate, display_bpp;
+	int		display_width, display_height, display_refreshrate;
 	qboolean	fullscreen;
 	cmd_function_t	*cmd;
 	const char	*read_vars[] =
@@ -1603,7 +1614,7 @@ void	VID_Init (void)
 		"r_softemu_metric",
 		"scr_pixelaspect",
 	};
-#define num_readvars	( sizeof(read_vars)/sizeof(read_vars[0]) )
+#define num_readvars	Q_COUNTOF(read_vars)
 
 	Con_SafePrintf ("\nVideo initialization\n");
 
@@ -1663,7 +1674,6 @@ void	VID_Init (void)
 		display_width = mode.w;
 		display_height = mode.h;
 		display_refreshrate = mode.refresh_rate;
-		display_bpp = SDL_BITSPERPIXEL(mode.format);
 	}
 
 	Cvar_SetValueQuick (&vid_width, (float)display_width);

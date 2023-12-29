@@ -1,0 +1,28 @@
+--- e1m2.ent
++++ e1m2@0caa.ent
+@@ -1567,23 +1567,23 @@
+ {
+ "light" "200"
+ "origin" "-612 -500 548"
+ "classname" "light"
+ }
+ {
+ "classname" "func_door"
+-"angle" "90"
++"angle" "91" // svdijk -- changed to prevent z-fighting (was "90")
+ "targetname" "t110"
+ "wait" "-1"
+ "model" "*33"
+ }
+ {
+ "sounds" "3"
+ "classname" "func_door"
+-"angle" "270"
++"angle" "269" // svdijk -- changed to prevent z-fighting (was "270")
+ "wait" "-1"
+ "model" "*34"
+ }
+ {
+ "classname" "trigger_once"
+ "target" "t110"
+ "model" "*35"

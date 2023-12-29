@@ -3638,6 +3638,6 @@ builtindef_t pr_builtindefs[] =
 
 	{"sprintf",					PF_BOTH(PF_sprintf),			627,	DP_QC_SPRINTF},					// string(string fmt, ...)
 };
-int pr_numbuiltindefs = countof (pr_builtindefs);
+int pr_numbuiltindefs = Q_COUNTOF(pr_builtindefs);
 
 COMPILE_TIME_ASSERT (builtin_buffer_size, countof (pr_builtindefs) + 1 <= MAX_BUILTINS);

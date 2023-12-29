@@ -324,6 +324,12 @@ copy "$(SolutionDir)..\zlib\$(PlatformShortName)\*.dll" "$(TargetDir)"</Command>
     <ClCompile Include="..\..\Quake\sv_move.c" />
     <ClCompile Include="..\..\Quake\sv_phys.c" />
     <ClCompile Include="..\..\Quake\sv_user.c" />
+    <ClCompile Include="..\..\Quake\sys_sdl_unix.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\Quake\sys_sdl_win.c" />
     <ClCompile Include="..\..\Quake\view.c" />
     <ClCompile Include="..\..\Quake\wad.c" />
@@ -404,6 +410,9 @@ copy "$(SolutionDir)..\zlib\$(PlatformShortName)\*.dll" "$(TargetDir)"</Command>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\QuakeSpasm.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="ironwail.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

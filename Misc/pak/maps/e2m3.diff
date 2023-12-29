@@ -1,0 +1,74 @@
+--- e2m3.ent
++++ e2m3@237a.ent
+@@ -1226,21 +1226,23 @@
+ {
+ "classname" "func_door"
+ "angle" "-2"
+ "spawnflags" "1"
+ "targetname" "t11"
+ "wait" "10"
+ "model" "*25"
++"lip" "7" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "func_door_secret"
+ "angle" "90"
+ "spawnflags" "8"
+ "targetname" "t11"
+ "model" "*26"
++"t_length" "65" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "light"
+ "origin" "1248 -288 312"
+ "light" "150"
+ }
+ {
+@@ -1907,14 +1909,15 @@
+ }
+ {
+ "classname" "func_door_secret"
+ "spawnflags" "2051"
+ "targetname" "t36"
+ "angle" "90"
+ "model" "*37"
++"t_length" "65" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "light"
+ "origin" "-1288 640 -80"
+ "light" "160"
+ }
+ {
+@@ -1939,14 +1942,15 @@
+ }
+ {
+ "classname" "func_door_secret"
+ "targetname" "t36"
+ "angle" "270"
+ "spawnflags" "2049"
+ "model" "*38"
++"t_length" "65" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "item_armor2"
+ "origin" "1128 600 -176"
+ "spawnflags" "1024"
+ }
+ {
+@@ -2643,14 +2647,15 @@
+ }
+ {
+ "classname" "func_door_secret"
+ "angle" "180"
+ "spawnflags" "2"
+ "targetname" "t41"
+ "model" "*66"
++"t_length" "65" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "trigger_multiple"
+ "target" "t41"
+ "model" "*67"
+ }
+ {

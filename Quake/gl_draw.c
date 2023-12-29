@@ -911,7 +911,7 @@ Fills a box of pixels with a single color
 void Draw_FillEx (float x, float y, float w, float h, const float *rgb, float alpha)
 {
 	guivertex_t *verts;
-	
+
 	GL_SetCanvasColor (rgb[0], rgb[1], rgb[2], alpha); //johnfitz -- added alpha
 	Draw_SetTexture (whitetexture);
 
@@ -1121,11 +1121,18 @@ void Draw_GetCanvasTransform (canvastype type, drawtransform_t *transform)
 		Draw_Transform (vid.guiwidth/s, vid.guiheight/s, s, CANVAS_ALIGN_CENTERX, CANVAS_ALIGN_CENTERY, transform);
 		break;
 	case CANVAS_SBAR:
-		s = CLAMP (1.0f, scr_sbarscale.value, (float)vid.guiwidth / 320.0f);
-		if (cl.gametype == GAME_DEATHMATCH && scr_hudstyle.value < 1)
+		if (scr_hudstyle.value > 2)	// qw hud could cut off if too short
+			s = CLAMP (1.0f, scr_sbarscale.value, (float)vid.guiheight / 240.0f);
+		else
+			s = CLAMP(1.0f, scr_sbarscale.value, (float)vid.guiwidth / 320.0f);
+		if (cl.gametype == GAME_DEATHMATCH && (scr_hudstyle.value < 1 || scr_hudstyle.value > 2) )
 			Draw_Transform (320, 48, s, CANVAS_ALIGN_LEFT, CANVAS_ALIGN_BOTTOM, transform);
 		else
 			Draw_Transform (320, 48, s, CANVAS_ALIGN_CENTERX, CANVAS_ALIGN_BOTTOM, transform);
+		break;
+    case CANVAS_SBAR_QW_INV:
+		s = CLAMP(1.0f, scr_sbarscale.value, (float)vid.guiheight / 240.0f);
+        Draw_Transform (48, 48, s, CANVAS_ALIGN_RIGHT, CANVAS_ALIGN_BOTTOM, transform);
 		break;
 	case CANVAS_SBAR2:
 		s = q_min (vid.guiwidth / 400.0f, vid.guiheight / 225.0f);

@@ -261,6 +261,9 @@
     <ClCompile Include="..\..\Quake\json.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Quake\sys_sdl_unix.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Quake\anorm_dots.h">
@@ -478,5 +481,8 @@
     <ResourceCompile Include="..\QuakeSpasm.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="ironwail.natvis" />
   </ItemGroup>
 </Project>

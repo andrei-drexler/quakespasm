@@ -35,6 +35,7 @@ extern byte *con_chars;
 extern char con_lastcenterstring[]; //johnfitz
 
 void Con_CheckResize (void);
+void Con_Scroll (int lines);
 void Con_Init (void);
 void Con_DrawConsole (int lines, qboolean drawinput);
 void Con_Printf (const char *fmt, ...) FUNC_PRINTF(1,2);
@@ -62,7 +63,8 @@ qboolean Con_Match (const char *str, const char *partial);
 void Con_LogCenterPrint (const char *str);
 
 void Con_Mousemove (int x, int y);
-void Con_Click (void);
+void Con_ForceMouseMove (void);
+qboolean Con_CopySelectionToClipboard (void);
 
 //
 // debuglog

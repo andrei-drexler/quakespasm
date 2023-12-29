@@ -1,0 +1,22 @@
+--- e2m7.ent
++++ e2m7@10a8.ent
+@@ -1449,18 +1449,19 @@
+ {
+ "targetname" "t119"
+ "classname" "func_door"
+ "wait" "-1"
+ "angle" "-1"
+ "speed" "30"
+ "message" "Go for a swim first..."
+ "sounds" "3"
+ "model" "*40"
++"origin" "-1 0 0" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "func_button"
+ "angle" "0"
+ "wait" "-1"
+ "target" "t45"
+ "model" "*41"
+ }
+ {

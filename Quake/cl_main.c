@@ -240,6 +240,7 @@ void CL_SignonReply (void)
 		break;
 
 	case 4:
+		cl.spawntime = cl.mtime[0];
 		SCR_EndLoadingPlaque ();		// allow normal screen updates
 		break;
 	}
@@ -853,22 +854,22 @@ void CL_Viewpos_f (void)
 	//camera position
 	q_snprintf (buf, sizeof (buf),
 		"(%i %i %i) %i %i %i",
-		(int)r_refdef.vieworg[0],
-		(int)r_refdef.vieworg[1],
-		(int)r_refdef.vieworg[2],
-		(int)r_refdef.viewangles[PITCH],
-		(int)r_refdef.viewangles[YAW],
-		(int)r_refdef.viewangles[ROLL]);
+		Q_rint (r_refdef.vieworg[0]),
+		Q_rint (r_refdef.vieworg[1]),
+		Q_rint (r_refdef.vieworg[2]),
+		Q_rint (r_refdef.viewangles[PITCH]),
+		Q_rint (r_refdef.viewangles[YAW]),
+		Q_rint (r_refdef.viewangles[ROLL]));
 #else
 	//player position
 	q_snprintf (buf, sizeof (buf),
 		"(%i %i %i) %i %i %i",
-		(int)cl_entities[cl.viewentity].origin[0],
-		(int)cl_entities[cl.viewentity].origin[1],
-		(int)cl_entities[cl.viewentity].origin[2],
-		(int)cl.viewangles[PITCH],
-		(int)cl.viewangles[YAW],
-		(int)cl.viewangles[ROLL]
+		Q_rint (cl_entities[cl.viewentity].origin[0]),
+		Q_rint (cl_entities[cl.viewentity].origin[1]),
+		Q_rint (cl_entities[cl.viewentity].origin[2]),
+		Q_rint (cl.viewangles[PITCH]),
+		Q_rint (cl.viewangles[YAW]),
+		Q_rint (cl.viewangles[ROLL])
 	);
 #endif
 	Con_Printf ("Viewpos: %s\n", buf);
@@ -876,6 +877,18 @@ void CL_Viewpos_f (void)
 	if (Cmd_Argc () >= 2 && !q_strcasecmp (Cmd_Argv (1), "copy"))
 		if (SDL_SetClipboardText (buf) < 0)
 			Con_Printf ("Clipboard copy failed: %s\n", SDL_GetError ());
+}
+
+/*
+===============
+CL_Viewpos_Completion_f -- tab completion for the viewpos command
+===============
+*/
+static void CL_Viewpos_Completion_f (const char *partial)
+{
+	if (Cmd_Argc () != 2)
+		return;
+	Con_AddToTabList ("copy", partial, NULL);
 }
 
 /*
@@ -939,6 +952,8 @@ CL_Init
 */
 void CL_Init (void)
 {
+	cmd_function_t *cmd;
+
 	SZ_Alloc (&cls.message, 1024);
 
 	CL_InitInput ();
@@ -986,7 +1001,9 @@ void CL_Init (void)
 	Cmd_AddCommand ("timedemo", CL_TimeDemo_f);
 
 	Cmd_AddCommand ("tracepos", CL_Tracepos_f); //johnfitz
-	Cmd_AddCommand ("viewpos", CL_Viewpos_f); //johnfitz
+	cmd = Cmd_AddCommand ("viewpos", CL_Viewpos_f); //johnfitz
+	if (cmd)
+		cmd->completion = CL_Viewpos_Completion_f;
 
 	Cmd_AddCommand_ServerCommand ("st", CL_SetStat_f);
 	Cmd_AddCommand_ServerCommand ("sts", CL_SetStatString_f);

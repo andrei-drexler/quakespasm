@@ -454,7 +454,7 @@ byte *Image_LoadPCX (FILE *f, int *width, int *height)
 	start = ftell (f); //save start of file (since we might be inside a pak file, SEEK_SET might not be the start of the pcx)
 
 	if (fread(&pcx, sizeof(pcx), 1, f) != 1)
-		Sys_Error ("Image_LoadPCX: can't read header for '%s'", loadfilename);
+		Sys_Error ("Failed reading header from '%s'", loadfilename);
 
 	pcx.xmin = (unsigned short)LittleShort (pcx.xmin);
 	pcx.ymin = (unsigned short)LittleShort (pcx.ymin);
@@ -479,7 +479,7 @@ byte *Image_LoadPCX (FILE *f, int *width, int *height)
 	//load palette
 	fseek (f, start + com_filesize - 768, SEEK_SET);
 	if (fread (palette, 768, 1, f) != 1)
-		Sys_Error ("'%s' has invalid palette", loadfilename);
+		Sys_Error ("Failed reading palette from '%s'", loadfilename);
 
 	//back to start of image data
 	fseek (f, start + sizeof(pcx), SEEK_SET);

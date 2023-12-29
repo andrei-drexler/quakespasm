@@ -55,9 +55,10 @@ static int numgltextures;
 static gltexture_t	*active_gltextures, *free_gltextures;
 gltexture_t		*notexture, *nulltexture, *whitetexture, *greytexture, *blacktexture;
 
+unsigned int d_8to24table_opaque[256];			//standard palette with alpha 255 for all colors
 unsigned int d_8to24table[256];					//standard palette, 255 is transparent
 unsigned int d_8to24table_fbright[256];			//fullbright palette, 0-223 are black (for additive blending)
-unsigned int d_8to24table_alphabright[256];		//palette with lighting mask in alpha channel (0=fullbright, 1=lit)
+unsigned int d_8to24table_alphabright[256];		//palette with lighting mask in alpha channel (0=fullbright, 255=lit)
 unsigned int d_8to24table_fbright_fence[256];	//fullbright palette, for fence textures
 unsigned int d_8to24table_nobright[256];		//nobright palette, 224-255 are black (for additive blending)
 unsigned int d_8to24table_nobright_fence[256];	//nobright palette, for fence textures
@@ -89,7 +90,7 @@ static const glmode_t glmodes[] = {
 	{GL_LINEAR,  GL_LINEAR_MIPMAP_NEAREST,	"GL_LINEAR_MIPMAP_NEAREST"},
 	{GL_LINEAR,  GL_LINEAR_MIPMAP_LINEAR,	"GL_LINEAR_MIPMAP_LINEAR"},
 };
-#define NUM_GLMODES (int)(sizeof(glmodes)/sizeof(glmodes[0]))
+#define NUM_GLMODES (int)Q_COUNTOF(glmodes)
 static int glmode_idx = 2; /* nearest with linear mips */
 
 static GLuint gl_samplers[NUM_GLMODES * 2]; // x2: nomip + mip
@@ -148,10 +149,8 @@ TexMgr_DescribeTextureModes_f -- report available texturemodes
 static void TexMgr_DescribeTextureModes_f (void)
 {
 	int i;
-
 	for (i = 0; i < NUM_GLMODES; i++)
 		Con_SafePrintf ("   %2i: %s\n", i + 1, glmodes[i].name);
-
 	Con_Printf ("%i modes\n", i);
 }
 
@@ -742,7 +741,7 @@ void TexMgr_LoadPalette (void)
 	mark = Hunk_LowMark ();
 	pal = (byte *) Hunk_Alloc (768);
 	if (fread (pal, 768, 1, f) != 1)
-		Sys_Error ("TexMgr_LoadPalette: read error");
+		Sys_Error ("Failed reading gfx/palette.lmp");
 	fclose(f);
 
 	COM_FOpenFile ("gfx/colormap.lmp", &f, NULL);
@@ -779,7 +778,7 @@ void TexMgr_LoadPalette (void)
 	src = pal;
 	for (i = 0; i < 256; i++, src += 3)
 	{
-		SetColor (&d_8to24table[i], src[0], src[1], src[2], 255);
+		SetColor (&d_8to24table_opaque[i], src[0], src[1], src[2], 255);
 		if (GetBit (is_fullbright, i))
 		{
 			SetColor (&d_8to24table_alphabright[i],	src[0], src[1], src[2], 0);
@@ -793,6 +792,8 @@ void TexMgr_LoadPalette (void)
 			SetColor (&d_8to24table_nobright[i],	src[0], src[1], src[2], 255);
 		}
 	}
+
+	memcpy(d_8to24table, d_8to24table_opaque, 256*4);
 	((byte *) &d_8to24table[255]) [3] = 0; //standard palette, 255 is transparent
 
 	//fullbright palette, for fence textures
@@ -933,8 +934,7 @@ int TexMgr_PadConditional (int s)
 {
 	if (s < TexMgr_SafeTextureSize(s))
 		return TexMgr_Pad(s);
-	else
-		return s;
+	return s;
 }
 
 /*
@@ -1436,7 +1436,7 @@ static void TexMgr_LoadImage8 (gltexture_t *glt, byte *data)
 	// choose palette and padbyte
 	if (glt->flags & TEXPREF_ALPHABRIGHT)
 	{
-		usepal = gl_fullbrights.value ? d_8to24table_alphabright : d_8to24table;
+		usepal = gl_fullbrights.value ? d_8to24table_alphabright : d_8to24table_opaque;
 		padbyte = 0;
 	}
 	else if (glt->flags & TEXPREF_FULLBRIGHT)
@@ -1643,6 +1643,7 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 	byte	translation[256];
 	byte	*src, *dst, *data = NULL, *translated;
 	int	mark, size, i;
+
 //
 // get source data
 //
@@ -1651,6 +1652,7 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 	if (glt->source_file[0] && glt->source_offset) {
 		//lump inside file
 		FILE *f;
+		int sz;
 		COM_FOpenFile(glt->source_file, &f, NULL);
 		if (!f) goto invalid;
 		fseek (f, glt->source_offset, SEEK_CUR);
@@ -1663,12 +1665,12 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 			size *= lightmap_bytes;
 		}
 		data = (byte *) Hunk_Alloc (size);
-		if (fread (data, size, 1, f) != 1)
-		{
-			fclose (f);
-			goto invalid;
-		}
+		sz = (int) fread (data, 1, size, f);
 		fclose (f);
+		if (sz != size) {
+			Hunk_FreeToLowMark(mark);
+			Host_Error("Read error for %s", glt->name);
+		}
 	}
 	else if (glt->source_file[0] && !glt->source_offset) {
 		data = Image_LoadImage (glt->source_file, (int *)&glt->source_width, (int *)&glt->source_height); //simple file

@@ -148,7 +148,7 @@ static void PR_PrintStatement (dstatement_t *s)
 {
 	int	i;
 
-	if ((unsigned int)s->op < sizeof(pr_opnames)/sizeof(pr_opnames[0]))
+	if ((unsigned int)s->op < Q_COUNTOF(pr_opnames))
 	{
 		Con_Printf("%s ", pr_opnames[s->op]);
 		i = strlen(pr_opnames[s->op]);
@@ -422,7 +422,7 @@ void PR_ExecuteProgram (func_t fnum)
     {
 	st++;	/* next statement */
 
-	if (++profile > 100000)
+	if (++profile > 0x1000000) /* was 100000 */
 	{
 		qcvm->xstatement = st - qcvm->statements;
 		PR_RunError("runaway loop error");

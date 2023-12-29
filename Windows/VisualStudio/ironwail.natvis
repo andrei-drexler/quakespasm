@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+	<!--
+	================================================================================================================================
+	3D vector
+	================================================================================================================================
+	-->
+	<Type Name="float3_t">
+		<DisplayString>[{data[0],g} {data[1],g} {data[2],g}]</DisplayString>
+		<Expand HideRawView="true">
+			<Item Name="x">data[0]</Item>
+			<Item Name="y">data[1]</Item>
+			<Item Name="z">data[2]</Item>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	QuakeC function
+	================================================================================================================================
+	-->
+	<Type Name="dfunction_t">
+		<!--Helpers-->
+		<Intrinsic Name="PR_GetString" Expression="((unsigned int)num &lt; qcvm-&gt;stringssize) ? qcvm-&gt;strings + num :
+					(num &lt; 0 &amp;&amp; num &gt;= -qcvm-&gt;numknownstrings) ? qcvm-&gt;knownstrings[-1 - num] : 0" ReturnType="const char*">
+			<Parameter Name="num" Type="int" />
+		</Intrinsic>
+
+		<Intrinsic Name="IsBuiltin" Expression="first_statement &lt; 0"/>
+
+		<Intrinsic Name="IsValidBuiltin" Expression="IsBuiltin() &amp;&amp; -first_statement &lt; qcvm-&gt;numbuiltins"/>
+
+		<!--Inline view - builtin-->
+		<DisplayString Condition="IsValidBuiltin()">#{-first_statement} {PR_GetString(s_name),sb} ({qcvm-&gt;builtins[-first_statement],na})</DisplayString>
+		<DisplayString Condition="IsBuiltin()">#{-first_statement} {PR_GetString(s_name),sb} (INVALID)</DisplayString>
+		<!--Inline view - QuakeC-->
+		<DisplayString>{PR_GetString(s_name),sb} ({PR_GetString(s_file),sb})</DisplayString>
+
+		<Expand>
+			<Item Name="name">PR_GetString(s_name),sb</Item>
+			<Item Name="file">PR_GetString(s_file),sb</Item>
+			<Synthetic Name="type">
+				<DisplayString Condition="IsBuiltin()">builtin</DisplayString>
+				<DisplayString>QuakeC</DisplayString>
+			</Synthetic>
+
+			<Synthetic Name="id" Condition="IsBuiltin()">
+				<DisplayString>#{-first_statement}</DisplayString>
+			</Synthetic>
+			<Item Name="function" Condition="IsValidBuiltin()">qcvm-&gt;builtins[-first_statement],na</Item>
+			<Synthetic Name="function" Condition="IsBuiltin() &amp;&amp; !IsValidBuiltin()">
+				<DisplayString>INVALID</DisplayString>
+			</Synthetic>
+
+			<Item Name="[parm sizes]" Condition="numparms &gt; 0">parm_size,[numparms]</Item>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	QuakeC field
+	================================================================================================================================
+	-->
+	<Type Name="ddef_t">
+		<!--Helpers-->
+		<Intrinsic Name="PR_GetString" Expression="((unsigned int)num &lt; qcvm-&gt;stringssize) ? qcvm-&gt;strings + num :
+					(num &lt; 0 &amp;&amp; num &gt;= -qcvm-&gt;numknownstrings) ? qcvm-&gt;knownstrings[-1 - num] : 0" ReturnType="const char*">
+			<Parameter Name="num" Type="int" />
+		</Intrinsic>
+
+		<Intrinsic Name="Type" Expression="(etype_t)(type &amp; 0x7fff)" ReturnType="etype_t"/>
+		<Intrinsic Name="IsSaved" Expression="(type &amp; 0x8000) != 0" ReturnType="bool"/>
+
+		<!--Inline view-->
+		<DisplayString Condition="Type() == ev_void">.void {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_string">.string {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_float">.float {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_vector">.vector {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_entity">.entity {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_field">.field {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_function">.void() {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString Condition="Type() == ev_pointer">.pointer {PR_GetString(s_name),sb}</DisplayString>
+		<DisplayString>.??? {PR_GetString(s_name),sb}</DisplayString>
+
+		<Expand>
+			<Item Name="name">PR_GetString(s_name),sb</Item>
+			<Item Name="type">Type(),en</Item>
+			<Item Name="saved">IsSaved()</Item>
+			<Item Name="offset">ofs*4</Item>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	Edict
+	================================================================================================================================
+	-->
+	<Type Name="edict_s">
+		<!--Helpers-->
+		<Intrinsic Name="PR_GetString" Expression="((unsigned int)num &lt; qcvm-&gt;stringssize) ? qcvm-&gt;strings + num :
+					(num &lt; 0 &amp;&amp; num &gt;= -qcvm-&gt;numknownstrings) ? qcvm-&gt;knownstrings[-1 - num] : 0" ReturnType="const char*">
+			<Parameter Name="num" Type="int" />
+		</Intrinsic>
+
+		<Intrinsic Name="EntNum" Expression="((uintptr_t)this-(uintptr_t)qcvm-&gt;edicts)/qcvm-&gt;edict_size"/>
+
+		<Intrinsic Name="IsValidProgEnt" Expression="(uintptr_t)ofs &lt;= (uintptr_t)((qcvm-&gt;num_edicts-1)*qcvm-&gt;edict_size)" ReturnType="bool">
+			<Parameter Name="ofs" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="PROG_TO_EDICT" Expression="IsValidProgEnt(ofs) ? (edict_s*)((char*)qcvm-&gt;edicts + ofs) : 0" ReturnType="edict_s*">
+			<Parameter Name="ofs" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="EDICT_TO_PROG" Expression="(uintptr_t)ent - (uintptr_t)qcvm-&gt;edicts" ReturnType="uintptr_t">
+			<Parameter Name="ent" Type="edict_t*"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsLinked" Expression="area.next != 0"/>
+
+		<Intrinsic Name="HullForSize" Expression="size &lt; 3.0 ? 0 : size &lt;= 32.0 ? 1 : 2" ReturnType="int">
+			<Parameter Name="size" Type="float"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsValidFunction" Expression="(unsigned int)(num - 1) &lt; (qcvm-&gt;progs-&gt;numfunctions - 1)" ReturnType="bool">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="GetFunction" Expression="IsValidFunction(num) ? qcvm-&gt;functions + num : 0" ReturnType="dfunction_t*">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsValidField" Expression="num &gt;= 1 &amp;&amp; num &lt; qcvm-&gt;progs-&gt;numfielddefs">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="FieldName" Expression="PR_GetString(qcvm-&gt;fielddefs[num].s_name)">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="SafeFieldPtr" Expression="IsValidField(num) ? qcvm-&gt;fielddefs + num : 0">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="FieldType" Expression="(etype_t)(qcvm-&gt;fielddefs[num].type &amp; 0x7FFF)">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="FieldData" Expression="((char*)&amp;v + qcvm-&gt;fielddefs[num].ofs * 4)">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsVecField" Expression="	num &gt;= 1 &amp;&amp; FieldType(num - 1) == ev_vector ||
+													num &gt;= 2 &amp;&amp; FieldType(num - 2) == ev_vector ||
+													num &gt;= 3 &amp;&amp; FieldType(num - 3) == ev_vector">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<!--Inline view-->
+		<DisplayString Condition="free &amp;&amp; IsLinked()">#{EntNum(),i} FREE LINKED</DisplayString>
+		<DisplayString Condition="free">#{EntNum(),i} FREE LINKED</DisplayString>
+		<DisplayString>#{EntNum(),i} {PR_GetString(v.classname),sb} {v.health,g}hp</DisplayString>
+
+		<!--Expanded view-->
+		<Expand>
+			<Item Name="index">EntNum()</Item>
+			<Item Name="classname">PR_GetString(v.classname),s</Item>
+			<Item Name="free">free,en</Item>
+			<Item Name="linked">IsLinked(),b</Item>
+
+			<!--Spatial properties-->
+			<Synthetic Name="[position]">
+				<Expand>
+					<Item Name="solid">(esolid_t)v.solid</Item>
+					<Item Name="movetype">(emovetype_t)v.movetype</Item>
+					<Item Name="flags">(eflags_t)v.flags</Item>
+					<Item Name="origin">*(float3_t*)v.origin,g</Item>
+					<Item Name="oldorigin">*(float3_t*)v.oldorigin,g</Item>
+					<Item Name="angles">*(float3_t*)v.angles,g</Item>
+					<Item Name="fixangle">v.fixangle,g</Item>
+					<Item Name="v_angle">*(float3_t*)v.v_angle,g</Item>
+					<Item Name="view_ofs">*(float3_t*)v.view_ofs,g</Item>
+					<Item Name="idealpitch">v.idealpitch,g</Item>
+					<Item Name="punchangle">*(float3_t*)v.punchangle,g</Item>
+					<Item Name="velocity">*(float3_t*)v.velocity,g</Item>
+					<Item Name="avelocity">*(float3_t*)v.avelocity,g</Item>
+					<Item Name="movedir">*(float3_t*)v.movedir,g</Item>
+					<Item Name="size">*(float3_t*)v.size,g</Item>
+					<Item Name="hull" Condition="v.solid != SOLID_BSP">HullForSize(v.absmax[0]-v.absmin[0])</Item>
+					<Item Name="absmin">*(float3_t*)v.absmin,g</Item>
+					<Item Name="absmax">*(float3_t*)v.absmax,g</Item>
+					<Synthetic Name="abscenter">
+						<DisplayString>[{(v.absmin[0]+v.absmax[0])*0.5f,g} {(v.absmin[1]+v.absmax[1])*0.5f,g} {(v.absmin[2]+v.absmax[2])*0.5f,g}]</DisplayString>
+					</Synthetic>
+					<Item Name="mins">*(float3_t*)v.mins,g</Item>
+					<Item Name="maxs">*(float3_t*)v.maxs,g</Item>
+					<Item Name="groundentity">PROG_TO_EDICT(v.groundentity),na</Item>
+					<Item Name="waterlevel">v.waterlevel,g</Item>
+					<Item Name="watertype">v.watertype,g</Item>
+					<Item Name="ideal_yaw">v.ideal_yaw,g</Item>
+					<Item Name="yaw_speed">v.yaw_speed,g</Item>
+					<Item Name="teleport_time">v.teleport_time,g</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Visual properties-->
+			<Synthetic Name="[visuals]">
+				<Expand>
+					<Item Name="model">PR_GetString(v.model),s</Item>
+					<Item Name="modelindex">v.modelindex,g</Item>
+					<Item Name="skin">v.skin,g</Item>
+					<Item Name="frame">v.frame,g</Item>
+					<Item Name="effects">(efx_t)v.flags</Item>
+					<Item Name="weaponmodel">PR_GetString(v.weaponmodel),s</Item>
+					<Item Name="weaponframe">v.weaponframe,g</Item>
+					<Item Name="colormap">v.colormap,g</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Audio properties-->
+			<Synthetic Name="[audio]">
+				<Expand>
+					<Item Name="sounds">v.sounds,g</Item>
+					<Item Name="noise">PR_GetString(v.noise),s</Item>
+					<Item Name="noise1">PR_GetString(v.noise1),s</Item>
+					<Item Name="noise2">PR_GetString(v.noise2),s</Item>
+					<Item Name="noise3">PR_GetString(v.noise3),s</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Scripting properties-->
+			<Synthetic Name="[scripting]">
+				<Expand>
+					<Item Name="target">PR_GetString(v.target),s</Item>
+					<Item Name="targetname">PR_GetString(v.targetname),s</Item>
+					<Item Name="netname">PR_GetString(v.netname),s</Item>
+					<Item Name="message">PR_GetString(v.message),s</Item>
+					<Item Name="nextthink">v.nextthink,g</Item>
+					<Item Name="ltime">v.ltime,g</Item>
+					<Item Name="qcvm time">qcvm-&gt;time,g</Item>
+					<Item Name="think">GetFunction(v.think),na</Item>
+					<Item Name="use">GetFunction(v.use),na</Item>
+					<Item Name="touch">GetFunction(v.touch),na</Item>
+					<Item Name="blocked">GetFunction(v.blocked),na</Item>
+					<Item Name="owner">PROG_TO_EDICT(v.owner),na</Item>
+					<Item Name="goalentity">PROG_TO_EDICT(v.goalentity),na</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Damage-related properties-->
+			<Synthetic Name="[damage]">
+				<Expand>
+					<Item Name="health">v.health,g</Item>
+					<Item Name="max_health">v.max_health,g</Item>
+					<Item Name="armortype">v.armortype,g</Item>
+					<Item Name="armorvalue">v.armorvalue,g</Item>
+					<Item Name="takedamage">(etakedamage_t)v.takedamage</Item>
+					<Item Name="deadflag">(edeadflag_t)v.deadflag</Item>
+					<Item Name="dmg_inflictor">PROG_TO_EDICT(v.dmg_inflictor),na</Item>
+					<Item Name="dmg_take">v.dmg_take,g</Item>
+					<Item Name="dmg_save">v.dmg_save,g</Item>
+					<Item Name="enemy">PROG_TO_EDICT(v.enemy),na</Item>
+					<Item Name="aiment">PROG_TO_EDICT(v.aiment),na</Item>
+					<Item Name="frags">v.frags,g</Item>
+					<Item Name="currentammo">v.currentammo,g</Item>
+					<Item Name="ammo_shells">v.ammo_shells,g</Item>
+					<Item Name="ammo_nails">v.ammo_nails,g</Item>
+					<Item Name="ammo_rockets">v.ammo_rockets,g</Item>
+					<Item Name="ammo_cells">v.ammo_cells,g</Item>
+					<Item Name="items">v.items,g</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Full entity chain, if present, including the current entity-->
+			<Synthetic Name="[chain]" Condition="!free &amp;&amp; v.chain != 0">
+				<Expand>
+					<CustomListItems>
+						<Variable Name="iter" InitialValue="EDICT_TO_PROG(this)"/>
+						<Variable Name="index" InitialValue="0"/>
+						<Loop>
+							<Break Condition="iter == 0"/>
+							<Item Name="[{index}]">PROG_TO_EDICT(iter),na</Item>
+							<Exec>iter = PROG_TO_EDICT(iter)-&gt;v.chain</Exec>
+							<Exec>index++</Exec>
+						</Loop>
+					</CustomListItems>
+				</Expand>
+			</Synthetic>
+
+			<!--All QuakeC fields-->
+			<Synthetic Name="[all fields]" Condition="!free">
+				<Expand>
+					<CustomListItems>
+						<Variable Name="i" InitialValue="1"/>
+						<Loop>
+							<Break Condition="i == qcvm-&gt;progs-&gt;numfielddefs"/>
+
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_string">PR_GetString(*(int*)FieldData(i)),s</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_entity">PROG_TO_EDICT(*(int*)FieldData(i)),na</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_function">GetFunction(*(int*)FieldData(i)),na</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_field">SafeFieldPtr(*(int*)FieldData(i)),na</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_float &amp;&amp; !IsVecField(i)">*(float*)FieldData(i),g</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_vector">*(float3_t*)FieldData(i),g</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_pointer">(void*)FieldData(i)</Item>
+
+							<Exec>i++</Exec>
+						</Loop>
+					</CustomListItems>
+				</Expand>
+			</Synthetic>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	Area node
+	================================================================================================================================
+	-->
+	<Type Name="areanode_s">
+		<!--Helpers-->
+		<Intrinsic Name="PR_GetString" Expression="((unsigned int)num &lt; qcvm-&gt;stringssize) ? qcvm-&gt;strings + num :
+					(num &lt; 0 &amp;&amp; num &gt;= -qcvm-&gt;numknownstrings) ? qcvm-&gt;knownstrings[-1 - num] : 0" ReturnType="const char*">
+			<Parameter Name="num" Type="int" />
+		</Intrinsic>
+
+		<Intrinsic Name="EdictFromLink" Expression="((edict_t*)((char*)link - (uintptr_t)(&amp;((edict_t*)0)->area)))">
+			<Parameter Name="link" Type="link_t*"/>
+		</Intrinsic>
+
+		<Intrinsic Name="HasSolids" Expression="solid_edicts.next != &amp;solid_edicts" ReturnType="bool"/>
+
+		<Intrinsic Name="HasTriggers" Expression="trigger_edicts.next != &amp;trigger_edicts" ReturnType="bool"/>
+
+		<Intrinsic Name="IsLeaf" Expression="axis == -1" ReturnType="bool"/>
+
+		<!--Inline view-->
+		<DisplayString Condition="IsLeaf()"	>type=LEAF solids={HasSolids()} triggers={HasTriggers()}</DisplayString>
+		<DisplayString						>type=NODE axis={axis} dist={dist,g} solids={HasSolids()} triggers={HasTriggers()}</DisplayString>
+
+		<!--Expanded view-->
+		<Expand>
+			<!--solid_edicts linked list-->
+			<Synthetic Name="[solid edicts]" Condition="HasSolids()">
+				<Expand>
+					<CustomListItems>
+						<Variable Name="end" InitialValue="&amp;solid_edicts"/>
+						<Variable Name="iter" InitialValue="solid_edicts.next"/>
+						<Variable Name="index" InitialValue="0"/>
+						<Loop>
+							<Break Condition="iter == end"/>
+							<Item Name="[{index}]">EdictFromLink(iter),na</Item>
+							<Exec>iter = iter-&gt;next</Exec>
+							<Exec>index++</Exec>
+						</Loop>
+					</CustomListItems>
+				</Expand>
+			</Synthetic>
+
+			<!--trigger_edicts linked list-->
+			<Synthetic Name="[trigger edicts]" Condition="HasTriggers()">
+				<Expand>
+					<CustomListItems>
+						<Variable Name="end" InitialValue="&amp;trigger_edicts"/>
+						<Variable Name="iter" InitialValue="trigger_edicts.next"/>
+						<Variable Name="index" InitialValue="0"/>
+						<Loop>
+							<Break Condition="iter == end || !iter"/>
+							<Item Name="[{index}]">EdictFromLink(iter),na</Item>
+							<Exec>iter = iter-&gt;next</Exec>
+							<Exec>index++</Exec>
+						</Loop>
+					</CustomListItems>
+				</Expand>
+			</Synthetic>
+
+			<Item Name="children" Condition="!IsLeaf()">children</Item>
+		</Expand>
+	</Type>
+
+
+</AutoVisualizer>

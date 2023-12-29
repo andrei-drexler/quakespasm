@@ -117,6 +117,9 @@ typedef enum {
 COMPILE_TIME_ASSERT(enum, sizeof(THE_DUMMY_ENUM) == sizeof(int));
 
 
+/* for array size: */
+#define Q_COUNTOF(x) (sizeof(x) / sizeof((x)[0]))
+
 /* Provide a substitute for offsetof() if we don't have one.
  * This variant works on most (but not *all*) systems...
  */
@@ -159,6 +162,10 @@ typedef int	fixed4_t;
 typedef int	fixed8_t;
 typedef int	fixed16_t;
 
+/* natvis helpers */
+typedef struct { float data[2]; } float2_t;
+typedef struct { float data[3]; } float3_t;
+typedef struct { float data[4]; } float4_t;
 
 /*==========================================================================*/
 

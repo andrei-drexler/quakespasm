@@ -105,6 +105,7 @@ extern	cvar_t	r_scale;
 extern	cvar_t	gl_clear;
 extern	cvar_t	gl_polyblend;
 extern	cvar_t	gl_nocolors;
+extern	cvar_t	gl_finish;
 
 extern	cvar_t	gl_playermip;
 
@@ -359,6 +360,9 @@ extern qboolean r_fullbright_cheatsafe, r_lightmap_cheatsafe, r_drawworld_cheats
 
 extern float	map_wateralpha, map_lavaalpha, map_telealpha, map_slimealpha; //ericw
 extern float	map_fallbackalpha; //spike -- because we might want r_wateralpha to apply to teleporters while water itself wasn't watervised
+
+#define NUMVERTEXNORMALS	162
+extern const float	r_avertexnormals[NUMVERTEXNORMALS][3];
 
 //johnfitz -- fog functions called from outside gl_fog.c
 void Fog_ParseServerMessage (void);

@@ -72,6 +72,12 @@
 #	define	PLATFORM_RISCOS		1
 #   endif
 
+#elif defined(__HAIKU__)
+
+#   if !defined(PLATFORM_HAIKU)
+#	define	PLATFORM_HAIKU		1
+#   endif
+
 #else	/* here goes the unix platforms */
 
 #if defined(__unix) || defined(__unix__) || defined(unix)	|| \
@@ -159,6 +165,8 @@
 #	define	PLATFORM_STRING	"RiscOS"
 #elif defined(__GNU__)
 #	define	PLATFORM_STRING	"GNU/Hurd"
+#elif defined(PLATFORM_HAIKU)
+#	define	PLATFORM_STRING	"Haiku"
 #elif defined(PLATFORM_UNIX)
 #	define	PLATFORM_STRING	"Unix"
 #else

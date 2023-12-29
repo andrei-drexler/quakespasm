@@ -1,0 +1,30 @@
+--- e1m4.ent
++++ e1m4@958e.ent
+@@ -2143,12 +2143,13 @@
+ {
+ "classname" "func_door_secret"
+ "angle" "0"
+ "spawnflags" "1"
+ "targetname" "t91"
+ "model" "*53"
++"t_length" "73" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "classname" "func_button"
+ "angle" "-2"
+ "wait" "-1"
+ "target" "t92"
+@@ -2202,12 +2203,13 @@
+ {
+ "spawnflags" "3"
+ "angle" "0"
+ "classname" "func_door_secret"
+ "targetname" "t91"
+ "model" "*60"
++"t_length" "73" // svdijk -- added to prevent z-fighting
+ }
+ {
+ "light" "150"
+ "origin" "680 -256 1144"
+ "classname" "light"
+ }

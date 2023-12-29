@@ -1043,7 +1043,7 @@ static void S_SoundList (void)
 	int		i;
 	sfx_t	*sfx;
 	sfxcache_t	*sc;
-	int		size, total;
+	int	size, total;
 
 	total = 0;
 	for (sfx = known_sfx, i = 0; i < num_sfx; i++, sfx++)
@@ -1086,11 +1086,9 @@ void S_ClearPrecache (void)
 {
 }
 
-
 void S_BeginPrecaching (void)
 {
 }
-
 
 void S_EndPrecaching (void)
 {
