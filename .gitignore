@@ -1,5 +1,6 @@
 Windows/VisualStudio/.vs/
 Windows/VisualStudio/Build-*/
+Windows/VisualStudio/ironwail.vcxproj.user
 Quake/*.o
 Quake/*.d
 Quake/*.res
