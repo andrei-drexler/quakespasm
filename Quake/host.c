@@ -1179,7 +1179,7 @@ void _Host_Frame (double time)
 
 // update accumulated tick time for renderer/network isolation
 	if (host_netinterval)
-		accumtime = CLAMP(0.0, accumtime + host_frametime, 0.2);
+		accumtime = CLAMP(0.0, accumtime + host_frametime, q_max (0.2, host_netinterval * 2));
 
 // run async procs
 	AsyncQueue_Drain (&async_queue);
