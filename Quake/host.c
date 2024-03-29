@@ -119,19 +119,7 @@ Host_Fps_f -- ericw
 */
 static void Host_Fps_f (cvar_t *var)
 {
-	if (host_netfps.value > 0)
-	{
-		if (var == &host_netfps)
-		{
-			if (!host_netfixed)
-				Con_Printf ("Using fixed tickrate renderer/network isolation.\n");
-			if (host_netfps.value > 72)
-				Con_Warning ("host_netfps above 72 breaks physics.\n");
-			host_netinterval = 1.0 / q_min (host_netfps.value, 1000);
-			host_netfixed = true;
-		}
-	}
-	else if (!q_strcasecmp (host_netfps.string, "auto"))
+	if (!q_strcasecmp (host_netfps.string, "auto"))
 	{
 		if (!host_netinterval || host_netfixed)
 			Con_Printf ("Using dynamic tickrate renderer/network isolation.\n");
@@ -141,12 +129,24 @@ static void Host_Fps_f (cvar_t *var)
 			host_netinterval = 1.0 / host_maxfps.value;
 		host_netfixed = false;
 	}
-	else
+	else if (var == &host_netfps)
 	{
-		if (host_netinterval)
-			Con_Printf ("Disabling renderer/network isolation.\n");
-		host_netinterval = 0;
-		host_netfixed = false;
+		if (host_netfps.value > 0)
+		{
+			if (!host_netfixed)
+				Con_Printf ("Using fixed tickrate renderer/network isolation.\n");
+			if (host_netfps.value > 72)
+				Con_Warning ("host_netfps above 72 breaks physics.\n");
+			host_netinterval = 1.0 / q_min (host_netfps.value, 1000);
+			host_netfixed = true;
+		}
+		else
+		{
+			if (host_netinterval)
+				Con_Printf ("Disabling renderer/network isolation.\n");
+			host_netinterval = 0;
+			host_netfixed = false;
+		}
 	}
 }
 
