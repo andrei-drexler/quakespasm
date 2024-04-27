@@ -274,7 +274,7 @@ void IN_Deactivate (qboolean free_cursor)
 
 void IN_DeactivateForConsole (void)
 {
-	IN_Deactivate(true);
+	IN_Deactivate(modestate == MS_WINDOWED || ui_mouse.value);
 }
 
 void IN_DeactivateForMenu (void)

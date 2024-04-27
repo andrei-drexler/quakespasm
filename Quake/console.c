@@ -35,6 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 extern qboolean	keydown[256];
+extern cvar_t	ui_mouse;
 
 int 		con_linewidth;
 
@@ -581,6 +582,10 @@ static void Con_SetMouseState (conmouse_t state)
 	int x, y;
 	conofs_t pos;
 
+	// When mouse cursor disabled, do not select text on click or open hotlinks.
+	if (!ui_mouse.value)
+		return;
+
 	if (con_mousestate == state)
 		return;
 
@@ -632,6 +637,10 @@ Mouse movement callback
 */
 void Con_Mousemove (int x, int y)
 {
+	// When mouse cursor disabled, do not select text on drag or set hotlinks.
+	if (!ui_mouse.value)
+		return;
+
 	if (con_mousestate == CMS_NOTPRESSED)
 	{
 		Con_SetHotLink (Con_GetLinkAtPixel (x, y));
