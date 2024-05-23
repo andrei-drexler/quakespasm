@@ -392,6 +392,7 @@ void Sky_LoadSkyBox (const char *name)
 	char		filename[MAX_OSPATH];
 	byte		*data[6];
 	skybox_t	newsky;
+	enum srcformat	fmt;
 
 	if (skybox && strcmp(skybox->name, name) == 0)
 		return; //no change
@@ -418,9 +419,12 @@ void Sky_LoadSkyBox (const char *name)
 	for (i = 0, numloaded = 0, samesize = 0; i < 6; i++)
 	{
 		q_snprintf (filename, sizeof(filename), "gfx/env/%s%s", name, suf[i]);
-		data[i] = Image_LoadImage (filename, &width[i], &height[i]);
+		data[i] = Image_LoadImage (filename, &width[i], &height[i], &fmt);
 		if (data[i])
 		{
+			if (fmt != SRC_RGBA)
+				Sys_Error ("Bad format %i for skybox side %s", fmt, filename);
+
 			numloaded++;
 			if (width[i] != height[i])
 				samesize = -1;

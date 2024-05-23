@@ -120,44 +120,6 @@ static const keyname_t keynames[] =
 	{"MOUSE4", K_MOUSE4},
 	{"MOUSE5", K_MOUSE5},
 
-	{"JOY1", K_JOY1},
-	{"JOY2", K_JOY2},
-	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},
-
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
-	{"AUX3", K_AUX3},
-	{"AUX4", K_AUX4},
-	{"AUX5", K_AUX5},
-	{"AUX6", K_AUX6},
-	{"AUX7", K_AUX7},
-	{"AUX8", K_AUX8},
-	{"AUX9", K_AUX9},
-	{"AUX10", K_AUX10},
-	{"AUX11", K_AUX11},
-	{"AUX12", K_AUX12},
-	{"AUX13", K_AUX13},
-	{"AUX14", K_AUX14},
-	{"AUX15", K_AUX15},
-	{"AUX16", K_AUX16},
-	{"AUX17", K_AUX17},
-	{"AUX18", K_AUX18},
-	{"AUX19", K_AUX19},
-	{"AUX20", K_AUX20},
-	{"AUX21", K_AUX21},
-	{"AUX22", K_AUX22},
-	{"AUX23", K_AUX23},
-	{"AUX24", K_AUX24},
-	{"AUX25", K_AUX25},
-	{"AUX26", K_AUX26},
-	{"AUX27", K_AUX27},
-	{"AUX28", K_AUX28},
-	{"AUX29", K_AUX29},
-	{"AUX30", K_AUX30},
-	{"AUX31", K_AUX31},
-	{"AUX32", K_AUX32},
-
 	{"PAUSE", K_PAUSE},
 
 	{"MWHEELUP", K_MWHEELUP},
@@ -172,12 +134,22 @@ static const keyname_t keynames[] =
 	{"RTHUMB", K_RTHUMB},
 	{"LSHOULDER", K_LSHOULDER},
 	{"RSHOULDER", K_RSHOULDER},
+	{"DPAD_UP", K_DPAD_UP},
+	{"DPAD_DOWN", K_DPAD_DOWN},
+	{"DPAD_LEFT", K_DPAD_LEFT},
+	{"DPAD_RIGHT", K_DPAD_RIGHT},
 	{"ABUTTON", K_ABUTTON},
 	{"BBUTTON", K_BBUTTON},
 	{"XBUTTON", K_XBUTTON},
 	{"YBUTTON", K_YBUTTON},
 	{"LTRIGGER", K_LTRIGGER},
 	{"RTRIGGER", K_RTRIGGER},
+	{"MISC1", K_MISC1},
+	{"PADDLE1", K_PADDLE1},
+	{"PADDLE2", K_PADDLE2},
+	{"PADDLE3", K_PADDLE3},
+	{"PADDLE4", K_PADDLE4},
+	{"TOUCHPAD", K_TOUCHPAD},
 
 	{NULL,		0}
 };
@@ -392,6 +364,7 @@ void Key_Console (int key)
 		return;
 
 	case K_LEFTARROW:
+	case K_DPAD_LEFT:
 		if (key_linepos > 1)
 		{
 			if (keydown[K_CTRL])
@@ -404,6 +377,7 @@ void Key_Console (int key)
 		return;
 
 	case K_RIGHTARROW:
+	case K_DPAD_RIGHT:
 		len = strlen(workline);
 		if ((int)len == key_linepos)
 		{
@@ -427,6 +401,7 @@ void Key_Console (int key)
 		return;
 
 	case K_UPARROW:
+	case K_DPAD_UP:
 		if (history_line == edit_line)
 			Q_strcpy(current, workline);
 
@@ -450,6 +425,7 @@ void Key_Console (int key)
 		return;
 
 	case K_DOWNARROW:
+	case K_DPAD_DOWN:
 		if (history_line == edit_line)
 			return;
 
@@ -498,6 +474,14 @@ void Key_Console (int key)
 		if (keydown[K_CTRL]) {		/* Ctrl+v paste */
 			PasteToConsole();
 			Con_TabComplete (TABCOMPLETE_AUTOHINT);
+			return;
+		}
+		break;
+
+	case 'a':
+	case 'A':
+		if (keydown[K_CTRL]) {		/* Ctrl+A: select whole buffer */
+			Con_SelectAll();
 			return;
 		}
 		break;
@@ -943,6 +927,10 @@ void Key_Init (void)
 	consolekeys[K_DOWNARROW] = true;
 	consolekeys[K_LEFTARROW] = true;
 	consolekeys[K_RIGHTARROW] = true;
+	consolekeys[K_DPAD_UP] = true;
+	consolekeys[K_DPAD_DOWN] = true;
+	consolekeys[K_DPAD_LEFT] = true;
+	consolekeys[K_DPAD_RIGHT] = true;
 	consolekeys[K_CTRL] = true;
 	consolekeys[K_SHIFT] = true;
 	consolekeys[K_INS] = true;
@@ -1089,7 +1077,7 @@ void Key_EventWithKeycode (int key, qboolean down, int keycode)
 			if (key_dest == key_game && !con_forcedup)
 				return; // ignore autorepeats in game mode
 		}
-		else if (key >= 200 && !keybindings[key] && key_dest != key_menu)
+		else if (key >= 200 && !keybindings[key] && key_dest == key_game && !cls.demoplayback)
 		{
 			int optkey;
 			if (Key_GetKeysForCommand ("menu_options", &optkey, 1))
@@ -1157,6 +1145,59 @@ void Key_EventWithKeycode (int key, qboolean down, int keycode)
 		if (down && !wasdown)
 			Cbuf_AddText ("screenshot\n");
 		return;
+	}
+
+// demo controls
+	if (cls.demoplayback && key_dest == key_game)
+	{
+		switch (key)
+		{
+		case K_SPACE:
+		case K_YBUTTON:
+			// Pause
+			if (down > wasdown)
+				cls.demopaused = !cls.demopaused;
+			return;
+
+		case K_UPARROW:
+		case K_DPAD_UP:
+			// Resume/increase speed
+			if (down > wasdown)
+			{
+				if (!cls.demopaused)
+					cls.basedemospeed = CLAMP (0.25f, cls.basedemospeed * 2.f, 8.f);
+				cls.demopaused = false;
+			}
+			return;
+
+		case K_DOWNARROW:
+		case K_DPAD_DOWN:
+			// Decrease speed/pause
+			if (down > wasdown)
+			{
+				cls.basedemospeed *= 0.5f;
+				if (cls.basedemospeed < 0.25f)
+				{
+					cls.basedemospeed = 0.25f;
+					cls.demopaused = true;
+				}
+			}
+			return;
+
+		case K_LEFTARROW:
+		case K_RIGHTARROW:
+		case K_DPAD_LEFT:
+		case K_DPAD_RIGHT:
+		case K_SHIFT:
+		case K_CTRL:
+			// Temporary modifiers: they don't perform their actions on up/down events, but are queried per frame instead
+			// to avoid having to manage state transitions (e.g. pressing esc while still holding left arrow to rewind).
+			return;
+
+		default:
+			// Not a demo control key
+			break;
+		}
 	}
 
 // key up events only generate commands if the game key binding is

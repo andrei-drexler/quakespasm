@@ -1124,7 +1124,7 @@ void Sbar_DrawInventory2 (void)
 	{
 		pic = Sbar_InventoryBarPic ();
 
-		if (scr_hudstyle.value >= 2) // right side, 2x2
+		if (hudstyle == HUD_MODERN_SIDEAMMO || hudstyle == HUD_QUAKEWORLD) // right side, 2x2
 		{
 			const int ITEM_WIDTH = 52;
 			x = (int)(glcanvas.right - SBAR2_MARGIN_X - ITEM_WIDTH * 2 + 0.5f);
@@ -1147,7 +1147,7 @@ void Sbar_DrawInventory2 (void)
 	}
 
 	// items
-	if (scr_viewsize.value < 110 && scr_hudstyle.value >= 2)
+	if (scr_viewsize.value < 110 && (hudstyle == HUD_MODERN_SIDEAMMO || hudstyle == HUD_QUAKEWORLD))
 	{
 		x = (int)(glcanvas.right - SBAR2_MARGIN_X - 16 + 0.5f);
 		y = (int)(glcanvas.bottom - SBAR2_MARGIN_Y - 68 - 20 + 0.5f);
@@ -1260,7 +1260,7 @@ static void Sbar_DrawSigils (void)
 	x = 160 - 32/2;
 	if (sb_showscores)
 		y = -20;
-	else if (scr_hudstyle.value < 2)
+	else if (hudstyle == HUD_CLASSIC || hudstyle == HUD_MODERN_CENTERAMMO)
 		y = -8;
 	else
 		y = -4;
@@ -1686,11 +1686,11 @@ void Sbar_Draw (void)
 	invuln = (cl.items & IT_INVULNERABILITY) != 0;
 	armor = invuln ? 666 : cl.stats[STAT_ARMOR];
 
-	if (scr_hudstyle.value < 1 || scr_hudstyle.value > 2)
+	if (hudstyle == HUD_CLASSIC || hudstyle == HUD_QUAKEWORLD)
 	{
 		GL_SetCanvas (CANVAS_SBAR); //johnfitz
 
-		if (scr_hudstyle.value < 1)	//classic hud
+		if (hudstyle == HUD_CLASSIC)	//classic hud
 		{
 			if (scr_viewsize.value < 110) //johnfitz -- check viewsize instead of sb_lines
 			{
@@ -1724,7 +1724,7 @@ void Sbar_Draw (void)
 		}
 		else if (scr_viewsize.value < 120) //johnfitz -- check viewsize instead of sb_lines
 		{
-			if (scr_hudstyle.value < 1)
+			if (hudstyle == HUD_CLASSIC)
 				Sbar_DrawPicAlpha (0, 0, sb_sbar, scr_sbaralpha.value); //johnfitz -- scr_sbaralpha
 
 	   // keys (hipnotic only)

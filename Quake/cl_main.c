@@ -307,6 +307,34 @@ void CL_PrintEntities_f (void)
 
 /*
 ===============
+CL_SetLightstyle
+
+Sets the lightstyle map and updates the length, peak, and average values
+===============
+*/
+void CL_SetLightstyle (int i, const char *str)
+{
+	q_strlcpy (cl_lightstyle[i].map, str, MAX_STYLESTRING);
+	cl_lightstyle[i].length = Q_strlen(cl_lightstyle[i].map);
+	//johnfitz -- save extra info
+	if (cl_lightstyle[i].length)
+	{
+		int j, total = 0;
+		cl_lightstyle[i].peak = 'a';
+		for (j=0; j<cl_lightstyle[i].length; j++)
+		{
+			total += cl_lightstyle[i].map[j] - 'a';
+			cl_lightstyle[i].peak = q_max(cl_lightstyle[i].peak, cl_lightstyle[i].map[j]);
+		}
+		cl_lightstyle[i].average = total / cl_lightstyle[i].length + 'a';
+	}
+	else
+		cl_lightstyle[i].average = cl_lightstyle[i].peak = 'm';
+	//johnfitz
+}
+
+/*
+===============
 CL_AllocDlight
 
 ===============
@@ -327,6 +355,7 @@ dlight_t *CL_AllocDlight (int key)
 				memset (dl, 0, sizeof(*dl));
 				dl->key = key;
 				dl->color[0] = dl->color[1] = dl->color[2] = 1; //johnfitz -- lit support via lordhavoc
+				dl->spawn = cl.time - 0.001;
 				return dl;
 			}
 		}
@@ -336,11 +365,12 @@ dlight_t *CL_AllocDlight (int key)
 	dl = cl_dlights;
 	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		if (dl->die < cl.time)
+		if (dl->die < cl.time || dl->spawn < cl.time)
 		{
 			memset (dl, 0, sizeof(*dl));
 			dl->key = key;
 			dl->color[0] = dl->color[1] = dl->color[2] = 1; //johnfitz -- lit support via lordhavoc
+			dl->spawn = cl.time - 0.001;
 			return dl;
 		}
 	}
@@ -349,6 +379,7 @@ dlight_t *CL_AllocDlight (int key)
 	memset (dl, 0, sizeof(*dl));
 	dl->key = key;
 	dl->color[0] = dl->color[1] = dl->color[2] = 1; //johnfitz -- lit support via lordhavoc
+	dl->spawn = cl.time - 0.001;
 	return dl;
 }
 
@@ -370,7 +401,7 @@ void CL_DecayLights (void)
 	dl = cl_dlights;
 	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		if (dl->die < cl.time || !dl->radius)
+		if (dl->die < cl.time || dl->spawn > cl.time || !dl->radius)
 			continue;
 
 		dl->radius -= time*dl->decay;
@@ -683,9 +714,7 @@ int CL_ReadFromServer (void)
 	dlight_t	*l; //johnfitz
 	int			i; //johnfitz
 
-
-	cl.oldtime = cl.time;
-	cl.time += host_frametime;
+	CL_AdvanceTime ();
 
 	do
 	{
@@ -721,7 +750,7 @@ int CL_ReadFromServer (void)
 
 	//beams
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
-		if (b->model && b->endtime >= cl.time)
+		if (b->model && b->starttime <= cl.time && b->endtime >= cl.time)
 			num_beams++;
 	if (num_beams > 24 && dev_peakstats.beams <= 24)
 		Con_DWarning ("%i beams exceeded standard limit of 24 (max = %d).\n", num_beams, MAX_BEAMS);
@@ -730,7 +759,7 @@ int CL_ReadFromServer (void)
 
 	//dlights
 	for (i=0, l=cl_dlights ; i<MAX_DLIGHTS ; i++, l++)
-		if (l->die >= cl.time && l->radius)
+		if (l->die >= cl.time && l->spawn <= cl.time && l->radius)
 			num_dlights++;
 	if (num_dlights > 32 && dev_peakstats.dlights <= 32)
 		Con_DWarning ("%i dlights exceeded standard limit of 32 (max = %d).\n", num_dlights, MAX_DLIGHTS);

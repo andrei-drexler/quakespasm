@@ -64,6 +64,7 @@ void Con_LogCenterPrint (const char *str);
 
 void Con_Mousemove (int x, int y);
 void Con_ForceMouseMove (void);
+void Con_SelectAll (void);
 qboolean Con_CopySelectionToClipboard (void);
 
 //

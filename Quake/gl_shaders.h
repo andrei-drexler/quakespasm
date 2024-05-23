@@ -159,16 +159,22 @@ static const char warpscale_fragment_shader[] =
 ////////////////////////////////////////////////////////////////
 
 #define NOISE_FUNCTIONS \
-"// Interleaved gradient noise - Jorge Jimenez\n"\
-"// http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare \n"\
-"float ignoise01(vec2 p)\n"\
+"// ALU-only 16x16 Bayer matrix\n"\
+"float bayer01(ivec2 coord)\n"\
 "{\n"\
-"	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));\n"\
+"	coord &= 15;\n"\
+"	coord.y ^= coord.x;\n"\
+"	uint v = uint(coord.y | (coord.x << 8));	// 0  0  0  0 | x3 x2 x1 x0 |  0  0  0  0 | y3 y2 y1 y0\n"\
+"	v = (v ^ (v << 2)) & 0x3333;				// 0  0 x3 x2 |  0  0 x1 x0 |  0  0 y3 y2 |  0  0 y1 y0\n"\
+"	v = (v ^ (v << 1)) & 0x5555;				// 0 x3  0 x2 |  0 x1  0 x0 |  0 y3  0 y2 |  0 y1  0 y0\n"\
+"	v |= v >> 7;								// 0 x3  0 x2 |  0 x1  0 x0 | x3 y3 x2 y2 | x1 y1 x0 y0\n"\
+"	v = bitfieldReverse(v) >> 24;				// 0  0  0  0 |  0  0  0  0 | y0 x0 y1 x1 | y2 x2 y3 x3\n"\
+"	return float(v) * (1.0/256.0);\n"\
 "}\n"\
 "\n"\
-"float ignoise(vec2 p)\n"\
+"float bayer(ivec2 coord)\n"\
 "{\n"\
-"	return ignoise01(p) - 0.5;\n"\
+"	return bayer01(coord) - 0.5;\n"\
 "}\n"\
 "\n"\
 "// Hash without Sine\n"\
@@ -216,13 +222,10 @@ SOFTWARE.*/\
 "	return x;\n"\
 "}\n"\
 "\n"\
-"#define DITHER_NOISE(uv) tri(ignoise01(uv))\n"\
+"#define DITHER_NOISE(uv) tri(bayer01(ivec2(uv)))\n"\
 "#define SCREEN_SPACE_NOISE() DITHER_NOISE(floor(gl_FragCoord.xy)+0.5)\n"\
-"#define SUPPRESS_BANDING() \\\n"\
-"	(gl_NumSamples > 1 ?\\\n"\
-"		ignoise(floor(gl_FragCoord.xy) + 0.5) * (1.5/255.) :\\\n"\
-"		ignoise(gl_FragCoord.xy) * (1.5/255.))\n"\
-"#define PAL_NOISESCALE (12./255.)\n"\
+"#define SUPPRESS_BANDING() (bayer(ivec2(gl_FragCoord.xy)) * (1./255.))\n"\
+"#define PAL_NOISESCALE (9./255.)\n"\
 
 ////////////////////////////////////////////////////////////////
 
@@ -1047,27 +1050,51 @@ NOISE_FUNCTIONS
 static const char alias_vertex_shader[] =
 ALIAS_INSTANCE_BUFFER
 "\n"
-"layout(std430, binding=2) restrict readonly buffer PoseBuffer\n"
-"{\n"
-"	uvec2 PackedPosNor[];\n"
-"};\n"
-"\n"
-"layout(std430, binding=3) restrict readonly buffer UVBuffer\n"
-"{\n"
-"	vec2 TexCoords[];\n"
-"};\n"
-"\n"
-"struct Pose\n"
+"struct PoseVertex\n"
 "{\n"
 "	vec3 pos;\n"
 "	vec3 nor;\n"
 "};\n"
 "\n"
-"Pose GetPose(uint index)\n"
-"{\n"
-"	uvec2 data = PackedPosNor[index + gl_VertexID];\n"
-"	return Pose(vec3((data.xxx >> uvec3(0, 8, 16)) & 255), unpackSnorm4x8(data.y).xyz);\n"
-"}\n"
+"#if MD5\n"
+"	layout(location=0) in vec3 in_pos;\n"
+"	layout(location=1) in vec4 in_nor;\n"
+"	layout(location=2) in vec2 in_uv;\n"
+"	layout(location=3) in vec4 in_weights;\n"
+"	layout(location=4) in ivec4 in_indices;\n"
+"\n"
+"	layout(std430, binding=2) restrict readonly buffer PoseBuffer\n"
+"	{\n"
+"		layout(row_major) mat4x3 BonePoses[];\n"
+"	};\n"
+"\n"
+"	PoseVertex GetPoseVertex(uint pose)\n"
+"	{\n"
+"		mat4x3 anim = BonePoses[pose + in_indices.x] * in_weights.x;\n"
+"		anim += BonePoses[pose + in_indices.y] * in_weights.y;\n"
+"		if (in_weights.z + in_weights.w > 0.0)\n"
+"		{\n"
+"			anim += BonePoses[pose + in_indices.z] * in_weights.z;\n"
+"			anim += BonePoses[pose + in_indices.w] * in_weights.w;\n"
+"		}\n"
+"		return PoseVertex((anim * vec4(in_pos, 1.0)).xyz, (anim * vec4(in_nor.xyz, 0.0)).xyz);\n"
+"	}\n"
+"\n"
+"#else\n"
+"	layout(location=0) in vec2 in_uv;\n"
+"\n"
+"	layout(std430, binding=2) restrict readonly buffer BlendShapeBuffer\n"
+"	{\n"
+"		uvec2 PackedPosNor[];\n"
+"	};\n"
+"\n"
+"	PoseVertex GetPoseVertex(uint pose)\n"
+"	{\n"
+"		uvec2 data = PackedPosNor[pose + gl_VertexID];\n"
+"		return PoseVertex(vec3((data.xxx >> uvec3(0, 8, 16)) & 255), unpackSnorm4x8(data.y).xyz);\n"
+"	}\n"
+"\n"
+"#endif // MD5\n"
 "\n"
 "float r_avertexnormal_dot(vec3 vertexnormal, vec3 dir) // from MH \n"
 "{\n"
@@ -1090,9 +1117,9 @@ ALIAS_INSTANCE_BUFFER
 "void main()\n"
 "{\n"
 "	InstanceData inst = instances[gl_InstanceID];\n"
-"	out_texcoord = TexCoords[gl_VertexID];\n"
-"	Pose pose1 = GetPose(inst.Pose1);\n"
-"	Pose pose2 = GetPose(inst.Pose2);\n"
+"	out_texcoord = in_uv;\n"
+"	PoseVertex pose1 = GetPoseVertex(inst.Pose1);\n"
+"	PoseVertex pose2 = GetPoseVertex(inst.Pose2);\n"
 "	mat4x3 worldmatrix = transpose(mat3x4(inst.WorldMatrix[0], inst.WorldMatrix[1], inst.WorldMatrix[2]));\n"\
 "	vec3 lerpedVert = (worldmatrix * vec4(mix(pose1.pos, pose2.pos, inst.Blend), 1.0)).xyz;\n"
 "	gl_Position = ViewProj * vec4(lerpedVert, 1.0);\n"

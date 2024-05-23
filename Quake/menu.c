@@ -57,6 +57,7 @@ extern cvar_t r_softemu;
 extern cvar_t r_waterwarp;
 extern cvar_t r_oit;
 extern cvar_t r_alphasort;
+extern cvar_t r_md5;
 extern cvar_t r_lerpmodels;
 extern cvar_t r_lerpmove;
 extern cvar_t joy_deadzone_look;
@@ -68,11 +69,12 @@ extern cvar_t joy_invert;
 extern cvar_t joy_exponent;
 extern cvar_t joy_exponent_move;
 extern cvar_t joy_swapmovelook;
-extern cvar_t joy_enable;
+extern cvar_t gyro_enable;
 extern cvar_t gyro_mode;
 extern cvar_t gyro_turning_axis;
 extern cvar_t gyro_pitchsensitivity;
 extern cvar_t gyro_yawsensitivity;
+extern cvar_t gyro_noise_thresh;
 
 extern char crosshair_char;
 
@@ -81,6 +83,7 @@ extern qboolean quake64;
 enum m_state_e m_state;
 extern qboolean	keydown[256];
 int m_mousex, m_mousey;
+int m_lastkey = -1; // last key pressed
 qboolean m_ignoremouseframe;
 static int m_left, m_top, m_width, m_height;
 
@@ -3227,6 +3230,8 @@ void M_Calibration_Key (int key)
 #define MAX_TRIGGER_DEADZONE	0.75f
 #define MIN_GYRO_SENS			0.1f
 #define MAX_GYRO_SENS			8.f
+#define MIN_GYRO_NOISE_THRESH	0.f
+#define MAX_GYRO_NOISE_THRESH	5.f
 
 /*
 ================
@@ -3295,6 +3300,7 @@ void M_Menu_Gamepad_f (void)
 	def (VID_OPT_SCALE,			"Render Scale")		\
 	def (VID_OPT_ANISO,			"Anisotropic")		\
 	def (VID_OPT_TEXFILTER,		"Textures")			\
+	def (VID_OPT_MD5,			"Models")			\
 	def (VID_OPT_ANIMLERP,		"Animations")		\
 	def (VID_OPT_PARTICLES,		"Particles")		\
 	def (VID_OPT_ALPHAMODE,		"Transparency")		\
@@ -3305,32 +3311,35 @@ void M_Menu_Gamepad_f (void)
 	def (VID_OPT_SHOWFPS,		"Show FPS")			\
 ////////////////////////////////////////////////////
 #define GPAD_OPTIONS_LIST(def)						\
-	def(GPAD_OPT_ENABLE,		"Gamepad")			\
+	def(GPAD_OPT_DEVICE,		"Gamepad")			\
 													\
 	def(GPAD_OPT_SPACE1,		"")					\
+	def(GPAD_OPT_SPACE2,		"")					\
 													\
 	def(GPAD_OPT_SENSX,			"Yaw Speed")		\
 	def(GPAD_OPT_SENSY,			"Pitch Speed")		\
 	def(GPAD_OPT_INVERT,		"Invert Pitch")		\
 	def(GPAD_OPT_SWAP_MOVELOOK,	"Look Stick")		\
 													\
-	def(GPAD_OPT_SPACE2,		"")					\
+	def(GPAD_OPT_SPACE3,		"")					\
 													\
 	def(GPAD_OPT_EXPONENT_LOOK,	"Look Accel")		\
 	def(GPAD_OPT_EXPONENT_MOVE,	"Move Accel")		\
 													\
-	def(GPAD_OPT_SPACE3,		"")					\
+	def(GPAD_OPT_SPACE4,		"")					\
 													\
 	def(GPAD_OPT_DEADZONE_LOOK,	"Look Deadzone")	\
 	def(GPAD_OPT_DEADZONE_MOVE,	"Move Deadzone")	\
 	def(GPAD_OPT_DEADZONE_TRIG,	"Trigger Thresh")	\
 													\
-	def(GPAD_OPT_SPACE4,		"")					\
+	def(GPAD_OPT_SPACE5,		"")					\
 													\
-	def(GPAD_OPT_GYROMODE,		"Gyro Mode")		\
+	def(GPAD_OPT_GYROENABLE,	"Gyro")				\
+	def(GPAD_OPT_GYROMODE,		"Gyro Button")		\
 	def(GPAD_OPT_GYROAXIS,		"Gyro Axis")		\
 	def(GPAD_OPT_GYROSENSX,		"Gyro Yaw Speed")	\
 	def(GPAD_OPT_GYROSENSY,		"Gyro Pitch Speed")	\
+	def(GPAD_OPT_GYRONOISE,		"Gyro Noise Thresh")\
 	def(GPAD_OPT_CALIBRATE,		"Calibrate")		\
 ////////////////////////////////////////////////////
 
@@ -3350,7 +3359,15 @@ enum
 	GPAD_OPTIONS_FIRST		= OPTIONS_ITEMS + VIDEO_OPTIONS_ITEMS,
 	GPAD_OPTIONS_ITEMS		= GPAD_OPTIONS_LIST (COUNT_OPTION),
 	#undef COUNT_OPTION
+
+	GYRO_OPTIONS_FIRST		= GPAD_OPT_GYROENABLE,
+	GYRO_OPTIONS_ITEMS		= GPAD_OPTIONS_FIRST + GPAD_OPTIONS_ITEMS - GYRO_OPTIONS_FIRST,
 };
+
+static qboolean M_Options_IsGyroId (int id)
+{
+	return (unsigned int)(id - GYRO_OPTIONS_FIRST) < GYRO_OPTIONS_ITEMS;
+}
 
 static const char *const options_names[] =
 {
@@ -3436,13 +3453,31 @@ static int M_Options_GetSelected (void)
 	return optionsmenu.list.cursor + optionsmenu.first_item;
 }
 
+static qboolean M_Options_IsEnabled (int index)
+{
+	if ((unsigned int) index >= (unsigned int)optionsmenu.list.numitems)
+		return false;
+	index += optionsmenu.first_item;
+	if ((unsigned int) index >= countof (options_names))
+		return false;
+	if (index > GPAD_OPTIONS_FIRST && index < GPAD_OPTIONS_FIRST + GPAD_OPTIONS_ITEMS && !IN_HasGamepad ())
+		return false;
+	if (M_Options_IsGyroId (index))
+	{
+		if (!IN_HasGyro ())
+			return false;
+		if (!gyro_enable.value && index > GYRO_OPTIONS_FIRST)
+			return false;
+	}
+	return true;
+}
+
 static qboolean M_Options_IsSelectable (int index)
 {
+	if (!M_Options_IsEnabled (index))
+		return false;
 	index += optionsmenu.first_item;
-	return
-		(unsigned int) index < countof (options_names) &&
-		options_names[index][0] != '\0'
-	;
+	return options_names[index][0] != '\0';
 }
 
 static qboolean M_Options_Match (int index)
@@ -3505,6 +3540,10 @@ void M_Options_Init (enum m_state_e state)
 	optionsmenu.list.search.match_fn = M_Options_Match;
 
 	M_List_ClearSearch (&optionsmenu.list);
+
+	// If the cursor is on an inactive item, move it to the next active one
+	if (!M_Options_IsSelectable (optionsmenu.list.cursor))
+		M_List_SelectNextActive (&optionsmenu.list, optionsmenu.list.cursor, 1, true);
 
 	M_Options_UpdateLayout ();
 }
@@ -3626,7 +3665,7 @@ void M_AdjustSliders (int dir)
 		break;
 
 	case OPT_HUDSTYLE:	// hud style
-		Cvar_SetValueQuick (&scr_hudstyle, ((int) q_max (scr_hudstyle.value, 0.f) + 4 + dir) % 4);
+		Cvar_SetValueQuick (&scr_hudstyle, ((int) q_max (scr_hudstyle.value, 0.f) + (int) HUD_COUNT + dir) % (int) HUD_COUNT);
 		break;
 
 	case OPT_ALWAYRUN:	// always run
@@ -3735,6 +3774,9 @@ void M_AdjustSliders (int dir)
 	case VID_OPT_TEXFILTER:
 		VID_Menu_ChooseNextTexFilter ();
 		break;
+	case VID_OPT_MD5:
+		Cbuf_AddText ("toggle r_md5\n");
+		break;
 	case VID_OPT_ANIMLERP:
 		Cvar_SetValueQuick (&r_lerpmodels, !r_lerpmove.value);
 		Cvar_SetValueQuick (&r_lerpmove, !r_lerpmove.value);
@@ -3764,8 +3806,10 @@ void M_AdjustSliders (int dir)
 	//
 	// Gamepad Options
 	//
-	case GPAD_OPT_ENABLE:
-		Cvar_SetValueQuick (&joy_enable, !joy_enable.value);
+	case GPAD_OPT_DEVICE:
+		// Skip "off" option when using a gamepad to avoid getting into an awkward state
+		// on systems where the gamepad is the primary input method, such as the Steam Deck.
+		IN_UseNextGamepad (dir, m_lastkey < (int)K_GAMEPAD_BEGIN || m_lastkey >= (int)K_GAMEPAD_END);
 		break;
 	case GPAD_OPT_SENSX:
 		Cvar_SetValueQuick (&joy_sensitivity_yaw, CLAMP (MIN_JOY_SENS, joy_sensitivity_yaw.value + dir * 10.f, MAX_JOY_SENS));
@@ -3794,8 +3838,11 @@ void M_AdjustSliders (int dir)
 	case GPAD_OPT_DEADZONE_TRIG:
 		Cvar_SetValueQuick (&joy_deadzone_trigger, CLAMP (MIN_TRIGGER_DEADZONE, joy_deadzone_trigger.value + dir * 0.05f, MAX_TRIGGER_DEADZONE));
 		break;
+	case GPAD_OPT_GYROENABLE:
+		Cvar_SetValueQuick (&gyro_enable, !gyro_enable.value);
+		break;
 	case GPAD_OPT_GYROMODE:
-		Cvar_SetValueQuick (&gyro_mode, (int)(q_max (gyro_mode.value, 0.f) + 5 + dir) % 5);
+		Cvar_SetValueQuick (&gyro_mode, (int)(q_max (gyro_mode.value, 0.f) + GYRO_MODE_COUNT + dir) % GYRO_MODE_COUNT);
 		break;
 	case GPAD_OPT_GYROAXIS:
 		Cvar_SetValueQuick (&gyro_turning_axis, !gyro_turning_axis.value);
@@ -3805,6 +3852,9 @@ void M_AdjustSliders (int dir)
 		break;
 	case GPAD_OPT_GYROSENSY:
 		Cvar_SetValueQuick (&gyro_pitchsensitivity, CLAMP (MIN_GYRO_SENS, gyro_pitchsensitivity.value + dir * .1f, MAX_GYRO_SENS));
+		break;
+	case GPAD_OPT_GYRONOISE:
+		Cvar_SetValueQuick (&gyro_noise_thresh, CLAMP (MIN_GYRO_NOISE_THRESH, gyro_noise_thresh.value + dir * .5f, MAX_GYRO_NOISE_THRESH));
 		break;
 	case GPAD_OPT_CALIBRATE:
 		M_Menu_Calibration_f ();
@@ -3933,6 +3983,10 @@ qboolean M_SetSliderValue (int option, float f)
 		f = LERP (MIN_GYRO_SENS, MAX_GYRO_SENS, f);
 		Cvar_SetValueQuick (&gyro_pitchsensitivity, f);
 		return true;
+	case GPAD_OPT_GYRONOISE:
+		f = LERP (MIN_GYRO_NOISE_THRESH, MAX_GYRO_NOISE_THRESH, f);
+		Cvar_SetValueQuick (&gyro_noise_thresh, f);
+		return true;
 	default:
 		return false;
 	}
@@ -3980,6 +4034,7 @@ qboolean M_SliderClick (int cx, int cy)
 static void M_Options_DrawItem (int y, int item)
 {
 	char		buf[256];
+	const char	*str;
 	int			x = OPTIONS_MIDPOS;
 	float		r, l;
 
@@ -4056,14 +4111,14 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 
 	case OPT_HUDSTYLE:
-		if (scr_hudstyle.value < 1)
-			M_Print (x, y, "Classic");
-		else if (scr_hudstyle.value < 2)
-			M_Print (x, y, "Modern 1");
-		else if (scr_hudstyle.value < 3)
-			M_Print (x, y, "Modern 2");
-		else
-			M_Print(x, y, "QuakeWorld");
+		switch (hudstyle)
+		{
+		case HUD_MODERN_CENTERAMMO:		M_Print (x, y, "Modern 1"); break;
+		case HUD_MODERN_SIDEAMMO:		M_Print (x, y, "Modern 2"); break;
+		case HUD_QUAKEWORLD:			M_Print (x, y, "QuakeWorld"); break;
+		default:
+		case HUD_CLASSIC:				M_Print (x, y, "Classic"); break;
+		}
 		break;
 
 	case OPT_SNDVOL:
@@ -4171,6 +4226,9 @@ static void M_Options_DrawItem (int y, int item)
 	case VID_OPT_TEXFILTER:
 		M_Print (x, y, VID_Menu_GetTexFilterDesc ());
 		break;
+	case VID_OPT_MD5:
+		M_Print (x, y, r_md5.value ? "Smooth" : "Classic");
+		break;
 	case VID_OPT_ANIMLERP:
 		M_Print (x, y, r_lerpmodels.value ? "Smooth" : "Classic");
 		break;
@@ -4199,8 +4257,11 @@ static void M_Options_DrawItem (int y, int item)
 	//
 	// Gamepad Options
 	//
-	case GPAD_OPT_ENABLE:
-		M_DrawCheckbox (x, y, joy_enable.value);
+	case GPAD_OPT_DEVICE:
+		str = IN_GetGamepadName ();
+		if (!str)
+			str = "Off";
+		M_PrintWordWrap (x, y, str, 320 - x, 16, true); // note: hijacking the empty line below this option
 		break;
 	case GPAD_OPT_SENSX:
 		r = (joy_sensitivity_yaw.value - MIN_JOY_SENS) / (MAX_JOY_SENS - MIN_JOY_SENS);
@@ -4236,14 +4297,19 @@ static void M_Options_DrawItem (int y, int item)
 		r = (joy_deadzone_trigger.value - MIN_TRIGGER_DEADZONE) / (MAX_TRIGGER_DEADZONE - MIN_TRIGGER_DEADZONE);
 		M_DrawSlider (x, y, r);
 		break;
+	case GPAD_OPT_GYROENABLE:
+		if (!IN_HasGyro ())
+			M_Print (x, y, "Unavailable");
+		else
+			M_DrawCheckbox (x, y, gyro_enable.value);
+		break;
 	case GPAD_OPT_GYROMODE:
 		switch ((int)gyro_mode.value)
 		{
-		case 1:		M_Print (x, y, "off, button enables"); break;
-		case 2:		M_Print (x, y, "on, button disables"); break;
-		case 3:		M_Print (x, y, "always on"); break;
-		case 4:		M_Print (x, y, "on, button inverts direction"); break;
-		default:	M_Print (x, y, "off"); break;
+		case GYRO_BUTTON_ENABLES:		M_Print (x, y, "Enable gyro"); break;
+		case GYRO_BUTTON_DISABLES:		M_Print (x, y, "Disable gyro"); break;
+		case GYRO_BUTTON_INVERTS_DIR:	M_Print (x, y, "Invert dir"); break;
+		default:						M_Print (x, y, "Ignore"); break;
 		}
 		break;
 	case GPAD_OPT_GYROAXIS:
@@ -4257,6 +4323,10 @@ static void M_Options_DrawItem (int y, int item)
 		r = (gyro_pitchsensitivity.value - MIN_GYRO_SENS) / (MAX_GYRO_SENS - MIN_GYRO_SENS);
 		M_DrawSlider (x, y, r);
 		break;
+	case GPAD_OPT_GYRONOISE:
+		r = (gyro_noise_thresh.value - MIN_GYRO_NOISE_THRESH) / (MAX_GYRO_NOISE_THRESH - MIN_GYRO_NOISE_THRESH);
+		M_DrawSlider (x, y, r);
+		break;
 
 	default:
 		break;
@@ -4265,6 +4335,7 @@ static void M_Options_DrawItem (int y, int item)
 
 void M_Options_Draw (void)
 {
+	qboolean enabled, wasenabled;
 	int firstvis, numvis;
 	int i, x, y, cols;
 	qpic_t	*p;
@@ -4297,10 +4368,18 @@ void M_Options_Draw (void)
 			M_DrawEllipsisBar (x, y + optionsmenu.list.viewsize*8, cols);
 	}
 
+	wasenabled = true;
 	M_List_GetVisibleRange (&optionsmenu.list, &firstvis, &numvis);
 	while (numvis-- > 0)
 	{
 		i = firstvis++;
+		enabled = M_Options_IsEnabled (i);
+		if (enabled != wasenabled)
+		{
+			float val = enabled ? 1.f : 0.375f;
+			GL_SetCanvasColor (val, val, val, 1.f);
+			wasenabled = enabled;
+		}
 		M_Options_DrawItem (y, optionsmenu.first_item + i);
 
 		// cursor
@@ -4309,6 +4388,9 @@ void M_Options_Draw (void)
 
 		y += 8;
 	}
+
+	if (!wasenabled)
+		GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
 }
 
 void M_Options_Key (int k)
@@ -4468,7 +4550,7 @@ static const char* const bindnames[][2] =
 	{"centerview",		"Center view"},
 	{"zoom_in",			"Toggle zoom"},
 	{"+zoom",			"Quick zoom"},
-	{"+gyroaction",		"Gyro Off / On"},
+	{"+gyroaction",		"Gyro switch"},
 	{"",				""},
 	{"+attack",			"Attack"},
 	{"impulse 10",		"Next weapon"},
@@ -4563,7 +4645,7 @@ extern qpic_t	*pic_up, *pic_down;
 void M_Keys_Draw (void)
 {
 	int		firstvis, numvis;
-	int		i, x, y, cols;
+	int		i, j, x, y, cols;
 	int		keys[3];
 	const char	*name;
 	qpic_t	*p;
@@ -4581,7 +4663,12 @@ void M_Keys_Draw (void)
 	if (bind_grab)
 		M_Print (12, y + 32, "Press a key or button for this action");
 	else
-		M_Print (18, y + 32, "Enter to change, backspace to clear");
+	{
+		const char *msg = IN_HasGamepad () ?
+			"Enter/A to change, backspace/Y to clear" :
+			"Enter to change, backspace to clear";
+		M_PrintAligned (160, y + 32, ALIGN_CENTER, msg);
+	}
 
 	y += KEYLIST_OFS;
 
@@ -4618,28 +4705,20 @@ void M_Keys_Draw (void)
 			if (i == keysmenu.list.cursor && bind_grab && keys[2] != -1)
 				keys[0] = -1;
 
-			if (keys[0] == -1)
+			for (j = 0, x = 136; j < 3 && keys[j] != -1; j++)
 			{
-				print_fn (136, y, "???");
-			}
-			else
-			{
-				name = Key_KeynumToString (keys[0]);
-				print_fn (136, y, name);
-				x = strlen(name) * 8;
-				if (keys[1] != -1)
+				if (j)
 				{
-					name = Key_KeynumToString (keys[1]);
-					print_fn (136 + x + 8, y, "or");
-					print_fn (136 + x + 32, y, name);
-					x = x + 32 + strlen(name) * 8;
-					if (keys[2] != -1)
-					{
-						print_fn (136 + x + 8, y, "or");
-						print_fn (136 + x + 32, y, Key_KeynumToString (keys[2]));
-					}
+					print_fn (x + 8, y, "or");
+					x += 32;
 				}
+				name = Key_KeynumToString (keys[j]);
+				print_fn (x, y, name);
+				x += strlen (name) * 8;
 			}
+
+			if (j == 0)
+				print_fn (x, y, "???");
 		}
 
 		if (i == keysmenu.list.cursor)
@@ -4706,6 +4785,7 @@ void M_Keys_Key (int k)
 			break;
 		/* fall-through */
 	case K_DEL:
+	case K_YBUTTON:
 		M_ThrottledSound ("misc/menu2.wav");
 		M_UnbindCommand (bindnames[keysmenu.list.cursor][0]);
 		break;
@@ -6657,6 +6737,20 @@ void M_Keydown (int key)
 {
 	if (!bind_grab && !ui_mouse.value && M_IsMouseKey (key))
 		return;
+
+	m_lastkey = key;
+	if (!bind_grab)
+	{
+		switch (key)
+		{
+			case K_DPAD_UP:		key = K_UPARROW; break;
+			case K_DPAD_DOWN:	key = K_DOWNARROW; break;
+			case K_DPAD_LEFT:	key = K_LEFTARROW; break;
+			case K_DPAD_RIGHT:	key = K_RIGHTARROW; break;
+			default:
+				break;
+		}
+	}
 
 	switch (m_state)
 	{

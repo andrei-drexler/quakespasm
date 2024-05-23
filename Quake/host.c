@@ -613,6 +613,8 @@ not reinitialize anything.
 */
 void Host_ClearMemory (void)
 {
+	R_ClearBoundingBoxes ();
+
 	if (cl.qcvm.extfuncs.CSQC_Shutdown)
 	{
 		PR_SwitchQCVM(&cl.qcvm);

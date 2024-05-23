@@ -76,7 +76,7 @@ static filelist_item_t *FileList_AddWithData (const char *name, const void *data
 			return item;
 	}
 
-	item = (filelist_item_t *) Z_Malloc(sizeof(filelist_item_t) + datasize);
+	item = (filelist_item_t *) malloc (sizeof(filelist_item_t) + datasize);
 	q_strlcpy (item->name, name, sizeof(item->name));
 	if (datasize)
 	{
@@ -131,7 +131,7 @@ static void FileList_Clear (filelist_item_t **list)
 	while (*list)
 	{
 		blah = (*list)->next;
-		Z_Free(*list);
+		free (*list);
 		*list = blah;
 	}
 }
@@ -1448,11 +1448,9 @@ static qboolean SkyList_AddFile (const char *path)
 	// Check that the file is in the right directory
 	// We need this for pak files, which are all passed to this function
 	// without any kind of path filtering
-	len = strlen (path);
-	if (len <= sizeof (prefix) - 1 || q_strncasecmp (path, prefix, sizeof (prefix) - 1))
+	if (q_strncasecmp (path, prefix, sizeof (prefix) - 1) != 0)
 		return false;
 	path += sizeof (prefix) - 1;
-	len -= sizeof (prefix) - 1;
 
 	// Only accept TGA files
 	ext = COM_FileGetExtension (path);
@@ -1461,6 +1459,7 @@ static qboolean SkyList_AddFile (const char *path)
 
 	// Check that the image has the right suffix
 	COM_StripExtension (path, skyname, sizeof (skyname));
+	len = strlen (skyname);
 	if (len < sizeof (suffix) - 1)
 		return false;
 	len -= sizeof (suffix) - 1;
@@ -1469,7 +1468,7 @@ static qboolean SkyList_AddFile (const char *path)
 	skyname[len] = '\0';
 
 	// All ok, add skybox to the list
-	FileList_Add (skyname + (sizeof (prefix) - 1), &skylist);
+	FileList_Add (skyname, &skylist);
 
 	return true;
 }
@@ -2965,7 +2964,6 @@ static void Host_Pause_f (void)
 	if (cls.demoplayback)
 	{
 		cls.demopaused = !cls.demopaused;
-		cl.paused = cls.demopaused;
 		return;
 	}
 

@@ -143,6 +143,16 @@ FILE *Sys_fopen (const char *path, const char *mode)
 	return f;
 }
 
+int Sys_fseek (FILE *file, qfileofs_t ofs, int origin)
+{
+	return _fseeki64 (file, ofs, origin);
+}
+
+qfileofs_t Sys_ftell (FILE *file)
+{
+	return _ftelli64 (file);
+}
+
 int Sys_remove (const char *path)
 {
 	wchar_t	wpath[MAX_PATH];
@@ -159,22 +169,23 @@ int Sys_rename (const char *oldname, const char *newname)
 	return _wrename (oldnamew, newnamew);
 }
 
-long Sys_filelength (FILE *f)
+qfileofs_t Sys_filelength (FILE *f)
 {
-	long		pos, end;
+	qfileofs_t	pos, end;
 
-	pos = ftell (f);
-	fseek (f, 0, SEEK_END);
-	end = ftell (f);
-	fseek (f, pos, SEEK_SET);
+	pos = Sys_ftell (f);
+	Sys_fseek (f, 0, SEEK_END);
+	end = Sys_ftell (f);
+	Sys_fseek (f, pos, SEEK_SET);
 
 	return end;
 }
 
-int Sys_FileOpenRead (const char *path, int *hndl)
+qfileofs_t Sys_FileOpenRead (const char *path, int *hndl)
 {
-	FILE	*f;
-	int		i, retval;
+	FILE		*f;
+	int			i;
+	qfileofs_t	retval;
 
 	i = findhandle ();
 	f = Sys_fopen (path, "rb");

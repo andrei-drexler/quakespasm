@@ -48,6 +48,8 @@ typedef struct
 	float	percent;		// 0-256
 } cshift_t;
 
+extern cshift_t		cshift_empty;
+
 #define	CSHIFT_CONTENTS	0
 #define	CSHIFT_DAMAGE	1
 #define	CSHIFT_BONUS	2
@@ -68,6 +70,7 @@ typedef struct
 {
 	vec3_t	origin;
 	float	radius;
+	float	spawn;				// stop lighting before this time
 	float	die;				// stop lighting after this time
 	float	decay;				// drop this each second
 	float	minlight;			// don't add when contributing less
@@ -81,6 +84,7 @@ typedef struct
 {
 	int		entity;
 	struct qmodel_s	*model;
+	float	starttime;
 	float	endtime;
 	vec3_t	start, end;
 } beam_t;
@@ -120,9 +124,19 @@ typedef struct
 // want a svc_setpause inside the demo to actually pause demo playback).
 	qboolean	demopaused;
 
+// demo playback speed (<0 = rewinding; 0 = paused; >0 = forward)
+	float		demospeed;
+
+// base demo speed; different from demospeed when fast-forwarding/rewinding or when playback is paused
+// (we want to be able to set playback speed to 1/2x, pause, and then resume playback at 1/2x not 1x)
+	float		basedemospeed;
+
 	qboolean	timedemo;
 	int		forcetrack;		// -1 = use normal cd track
+	char		demofilename[MAX_OSPATH];
 	FILE		*demofile;
+	qfileofs_t	demofilestart;	// for demos in pak files
+	qfileofs_t	demofilesize;
 	int		td_lastframe;		// to meter out one message a frame
 	int		td_startframe;		// host_framecount at start
 	float		td_starttime;		// realtime at second frame of timedemo
@@ -313,6 +327,7 @@ extern	int				cl_max_edicts; //johnfitz -- only changes when new map loads
 //
 dlight_t *CL_AllocDlight (int key);
 void	CL_DecayLights (void);
+void	CL_SetLightstyle (int i, const char *str);
 
 void CL_Init (void);
 
@@ -356,6 +371,9 @@ void CL_ClearState (void);
 void CL_StopPlayback (void);
 int CL_GetMessage (void);
 void CL_ClearSignons (void);
+void CL_AdvanceTime (void);
+void CL_FinishDemoFrame (void);
+void CL_AddDemoRewindSound (int entnum, int channel, sfx_t *sfx, vec3_t pos, int vol, float atten);
 
 void CL_Stop_f (void);
 void CL_Record_f (void);

@@ -94,7 +94,18 @@ extern	cvar_t		scr_scale;
 extern	cvar_t		scr_crosshairscale;
 //johnfitz
 
+typedef enum hudstyle_t
+{
+	HUD_CLASSIC,
+	HUD_MODERN_CENTERAMMO,		// Modern 1
+	HUD_MODERN_SIDEAMMO,		// Modern 2
+	HUD_QUAKEWORLD,
+
+	HUD_COUNT,
+} hudstyle_t;
+
 extern	cvar_t		scr_hudstyle;
+extern	hudstyle_t	hudstyle;
 
 extern int scr_tileclear_updates; //johnfitz
 

@@ -76,7 +76,11 @@ R_AllocParticle
 particle_t *R_AllocParticle (void)
 {
 	if (r_numactiveparticles < r_numparticles)
-		return &particles[r_numactiveparticles++];
+	{
+		particle_t *p = &particles[r_numactiveparticles++];
+		p->spawn = cl.time - 0.001;
+		return p;
+	}
 	return NULL;
 }
 
@@ -628,7 +632,7 @@ void CL_RunParticles (void)
 
 	for (cur = active = 0, p = particles; cur < r_numactiveparticles; cur++, p++)
 	{
-		if (p->die < cl.time)
+		if (p->die < cl.time || p->spawn > cl.time)
 			continue;
 
 		p->org[0] += p->vel[0]*frametime;

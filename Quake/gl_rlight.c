@@ -147,6 +147,13 @@ void R_PushDlights (void)
 		{
 			gpulight_t *out;
 			qboolean cull = false;
+
+			if (l->spawn > cl.time)
+			{
+				l->die = 0.f;
+				continue;
+			}
+
 			if (l->die < cl.time || !l->radius)
 				continue;
 

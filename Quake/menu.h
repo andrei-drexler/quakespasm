@@ -82,6 +82,7 @@ void M_DrawPic (int x, int y, qpic_t *pic);
 void M_DrawSubpic (int x, int y, qpic_t *pic, int left, int top, int width, int height);
 void M_DrawTransPic (int x, int y, qpic_t *pic);
 void M_DrawCheckbox (int x, int y, int on);
+void M_DrawTextBox (int x, int y, int width, int lines);
 
 #endif	/* _QUAKE_MENU_H */
 

@@ -3,3 +3,4 @@ root = true
 [*]
 indent_style = tab
 indent_size = 4
+cpp_space_before_function_open_parenthesis = insert

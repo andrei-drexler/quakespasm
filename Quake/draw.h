@@ -27,6 +27,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // to touch the vid buffer
 
 extern	qpic_t		*draw_disc;	// also used on sbar
+extern	qboolean	custom_conchars;
+
+extern	const vec3_t	rgb_black;
+extern	const vec3_t	rgb_white;
+
+#define CHARSIZE	8
 
 void Draw_Init (void);
 void Draw_Character (int x, int y, int num);
@@ -40,7 +46,7 @@ void Draw_Fill (int x, int y, int w, int h, int c, float alpha); //johnfitz -- a
 void Draw_FillEx (float x, float y, float w, float h, const float *rgb, float alpha);
 void Draw_FadeScreen (void);
 void Draw_String (int x, int y, const char *str);
-void Draw_StringEx (int x, int y, int dim, const char *str);
+void Draw_StringEx (float x, float y, float dim, const char *str);
 qpic_t *Draw_PicFromWad2 (const char *name, unsigned int texflags);
 qpic_t *Draw_PicFromWad (const char *name);
 qpic_t *Draw_CachePic (const char *path);

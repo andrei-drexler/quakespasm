@@ -391,13 +391,13 @@ void SV_FindTouchedLeafs (edict_t *ent, mnode_t *node)
 	if (node->contents == CONTENTS_SOLID)
 		return;
 
+	if (ent->num_leafs == MAX_ENT_LEAFS)
+		return;
+
 // add an efrag if the node is a leaf
 
 	if ( node->contents < 0)
 	{
-		if (ent->num_leafs == MAX_ENT_LEAFS)
-			return;
-
 		leaf = (mleaf_t *)node;
 		leafnum = leaf - sv.worldmodel->leafs - 1;
 

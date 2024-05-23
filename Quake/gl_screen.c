@@ -95,6 +95,7 @@ cvar_t		scr_usekfont = {"scr_usekfont", "0", CVAR_NONE}; // 2021 re-release
 
 cvar_t		scr_hudstyle = {"hudstyle", "2", CVAR_ARCHIVE};
 cvar_t		cl_screenshotname = {"cl_screenshotname", "screenshots/%map%_%date%_%time%", CVAR_ARCHIVE};
+cvar_t		scr_demobar_timeout = {"scr_demobar_timeout", "1", CVAR_ARCHIVE};
 
 cvar_t		scr_viewsize = {"viewsize","100", CVAR_ARCHIVE};
 cvar_t		scr_fov = {"fov","90",CVAR_ARCHIVE};	// 10 - 170
@@ -115,6 +116,9 @@ extern	cvar_t	crosshair;
 extern	cvar_t	con_notifyfade;
 extern	cvar_t	con_notifyfadetime;
 
+extern	edict_t	**bbox_linked;
+extern	cvar_t	r_showfields;
+
 qboolean	scr_initialized;		// ready to draw
 
 qpic_t		*scr_net;
@@ -130,6 +134,8 @@ qboolean	scr_drawloading;
 float		scr_disabled_time;
 
 int	scr_tileclear_updates = 0; //johnfitz
+
+hudstyle_t	hudstyle;
 
 void SCR_ScreenShot_f (void);
 
@@ -399,7 +405,7 @@ static void SCR_CalcRefdef (void)
 	scale = CLAMP (1.0f, scr_sbarscale.value, (float)glwidth / 320.0f);
 	scale *= (float) vid.height / vid.guiheight;
 
-	if (size >= 120 || cl.intermission || scr_sbaralpha.value < 1 || scr_hudstyle.value >= 1 || cl.qcvm.extfuncs.CSQC_DrawHud) //johnfitz -- scr_sbaralpha.value
+	if (size >= 120 || cl.intermission || scr_sbaralpha.value < 1 || hudstyle != HUD_CLASSIC || cl.qcvm.extfuncs.CSQC_DrawHud) //johnfitz -- scr_sbaralpha.value
 		sb_lines = 0;
 	else if (size >= 110)
 		sb_lines = 24 * scale;
@@ -495,6 +501,20 @@ void SCR_PixelAspect_f (cvar_t *cvar)
 	VID_RecalcInterfaceSize ();
 }
 
+/*
+==================
+SCR_HUDStyle_f
+
+Updates hudstyle variable and invalidates refdef when scr_hudstyle changes
+==================
+*/
+void SCR_HUDStyle_f (cvar_t *cvar)
+{
+	int val = (int) cvar->value;
+	hudstyle = (hudstyle_t) CLAMP (0, val, (int) HUD_COUNT - 1);
+	vid.recalc_refdef = 1;
+}
+
 //============================================================================
 
 /*
@@ -529,15 +549,16 @@ void SCR_Init (void)
 	Cvar_RegisterVariable (&scr_showfps);
 	Cvar_RegisterVariable (&scr_showspeed);
 	Cvar_RegisterVariable (&scr_clock);
-	Cvar_RegisterVariable (&scr_hudstyle);
 	Cvar_RegisterVariable (&cl_screenshotname);
+	Cvar_RegisterVariable (&scr_demobar_timeout);
 	//johnfitz
 	Cvar_RegisterVariable (&scr_usekfont); // 2021 re-release
 	Cvar_SetCallback (&scr_fov, SCR_Callback_refdef);
 	Cvar_SetCallback (&scr_fov_adapt, SCR_Callback_refdef);
 	Cvar_SetCallback (&scr_zoomfov, SCR_Callback_refdef);
 	Cvar_SetCallback (&scr_viewsize, SCR_Callback_refdef);
-	Cvar_SetCallback (&scr_hudstyle, SCR_Callback_refdef);
+	Cvar_SetCallback (&scr_hudstyle, SCR_HUDStyle_f);
+	Cvar_RegisterVariable (&scr_hudstyle);
 	Cvar_RegisterVariable (&scr_fov);
 	Cvar_RegisterVariable (&scr_fov_adapt);
 	Cvar_RegisterVariable (&scr_zoomfov);
@@ -615,7 +636,7 @@ void SCR_DrawFPS (void)
 		else
 			sprintf (st, "%.2f ms", 1000.f / lastfps);
 		x = 320 - (strlen(st)<<3);
-		if (scr_hudstyle.value >= 1)
+		if (hudstyle != HUD_CLASSIC)
 		{
 			x = 320 - 16 - (strlen(st)<<3);
 			y = 8;
@@ -702,7 +723,7 @@ void SCR_DrawClock (void)
 		return;
 
 	//draw it
-	if (scr_hudstyle.value < 1)
+	if (hudstyle == HUD_CLASSIC)
 	{
 		GL_SetCanvas (CANVAS_BOTTOMRIGHT);
 		Draw_String (320 - (strlen(str)<<3), 200 - 8, str);
@@ -714,6 +735,141 @@ void SCR_DrawClock (void)
 	}
 
 	scr_tileclear_updates = 0;
+}
+
+/*
+==============
+SCR_PrintMirrored
+==============
+*/
+static void SCR_PrintMirrored (int x, int y, const char *str)
+{
+	x += strlen (str) * 8;
+	while (*str)
+	{
+		Draw_CharacterEx (x, y, -8, 8, 0x80 ^ (*str++));
+		x -= 8;
+	}
+}
+
+/*
+==============
+SCR_DrawDemoControls
+==============
+*/
+void SCR_DrawDemoControls (void)
+{
+	static const int	TIMEBAR_CHARS = 38;
+	static float		prevspeed = 1.0f;
+	static float		prevbasespeed = 1.0f;
+	static float		showtime = 1.0f;
+	int					i, len, x, y, min, sec;
+	float				frac;
+	const char			*str;
+	char				name[31]; // size chosen to avoid overlap with side text
+
+	if (!cls.demoplayback || scr_demobar_timeout.value < 0.f)
+	{
+		showtime = 0.f;
+		return;
+	}
+
+	// Determine for how long the demo playback info should be displayed
+	if (cls.demospeed != prevspeed || cls.basedemospeed != prevbasespeed ||			// speed/base speed changed
+		fabs (cls.demospeed) > cls.basedemospeed ||									// fast forward/rewind
+		!scr_demobar_timeout.value)													// controls always shown
+	{
+		prevspeed = cls.demospeed;
+		prevbasespeed = cls.basedemospeed;
+		showtime = scr_demobar_timeout.value > 0.f ? scr_demobar_timeout.value : 1.f;
+	}
+	else
+	{
+		showtime -= host_rawframetime;
+		if (showtime < 0.f)
+		{
+			showtime = 0.f;
+			return;
+		}
+	}
+
+	// Approximate the fraction of the demo that's already been played back
+	// based on the current file offset and total demo size
+	// Note: we need to take into account the starting offset for pak files
+	frac = (Sys_ftell (cls.demofile) - cls.demofilestart) / (double)cls.demofilesize;
+	frac = CLAMP (0.f, frac, 1.f);
+
+	if (cl.intermission)
+	{
+		GL_SetCanvas (CANVAS_MENU);
+		y = LERP (glcanvas.bottom, glcanvas.top, 0.125f) + 8;
+	}
+	else
+	{
+		GL_SetCanvas (CANVAS_SBAR);
+		y = glcanvas.bottom - 68;
+	}
+	x = (glcanvas.left + glcanvas.right) / 2 - TIMEBAR_CHARS / 2 * 8;
+
+	// Draw status box background
+	GL_SetCanvasColor (1.f, 1.f, 1.f, scr_sbaralpha.value);
+	M_DrawTextBox (x - 8, y - 8, TIMEBAR_CHARS, 1);
+	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+
+	// Print playback status on the left (paused/playing/fast-forward/rewind)
+	// Note: character #13 works well as a forward symbol, but Alkaline 1.2 changes it to a disk.
+	// If we have a custom conchars texture we switch to a safer alternative, the '>' character.
+	if (!cls.demospeed)
+		str = "II";
+	else if (fabs (cls.demospeed) > 1.f)
+		str = custom_conchars ? ">>" : "\xD\xD";
+	else 
+		str = custom_conchars ? ">" : "\xD";
+	if (cls.demospeed >= 0.f)
+		M_Print (x, y, str);
+	else
+		SCR_PrintMirrored (x, y, str);
+
+	// Print base playback speed on the right
+	if (!cls.basedemospeed)
+		str = "";
+	else if (fabs (cls.basedemospeed) >= 1.f)
+		str = va ("%gx", fabs (cls.basedemospeed));
+	else
+		str = va ("1/%gx", 1.f / fabs (cls.basedemospeed));
+	M_Print (x + (TIMEBAR_CHARS - strlen (str)) * 8, y, str);
+
+	// Print demo name in the center
+	COM_StripExtension (COM_SkipPath (cls.demofilename), name, sizeof (name));
+	x = (glcanvas.left + glcanvas.right) / 2;
+	M_Print (x - strlen (name) * 8 / 2, y, name);
+
+	// Draw seek bar rail
+	x = (glcanvas.left + glcanvas.right) / 2 - TIMEBAR_CHARS / 2 * 8;
+	y -= 8;
+	Draw_Character (x - 8, y, 128);
+	for (i = 0; i < TIMEBAR_CHARS; i++)
+		Draw_Character (x + i * 8, y, 129);
+	Draw_Character (x + i * 8, y, 130);
+
+	// Draw seek bar cursor
+	x += (TIMEBAR_CHARS - 1) * 8 * frac;
+	Draw_Character (x, y, 131);
+
+	// Print current time above the cursor
+	y -= 11;
+	sec = (int) cl.time;
+	min = sec / 60;
+	sec %= 60;
+	str = va ("%i:%02i", min, sec);
+	x -= (strchr (str, ':') - str) * 8; // align ':' with cursor
+	len = strlen (str);
+	// M_DrawTextBox effectively rounds width up to a multiple of 2,
+	// so if our length is odd we pad by half a character on each side
+	GL_SetCanvasColor (1.f, 1.f, 1.f, scr_sbaralpha.value);
+	M_DrawTextBox (x - 8 - (len & 1) * 8 / 2, y - 8, len + (len & 1), 1);
+	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	Draw_String (x, y, str);
 }
 
 /*
@@ -868,7 +1024,7 @@ void SCR_DrawSaving (void)
 
 	x = 320 - 16 - draw_disc->width;
 	y = 8;
-	if (scr_hudstyle.value >= 1 && scr_viewsize.value < 130)
+	if (hudstyle != HUD_CLASSIC && scr_viewsize.value < 130)
 	{
 		if (scr_clock.value) y += 8;
 		if (scr_showfps.value) y += 8;
@@ -893,6 +1049,300 @@ void SCR_DrawCrosshair (void)
 	Draw_Character(-4, -4, crosshair_char);
 }
 
+typedef struct
+{
+	float	scale[2];
+	float	offset[2];
+} canvasmap_t;
+
+/*
+==============
+SCR_SetupProjToCanvasMap
+
+Computes mapping from NDC coordinates (-1..1) to canvas coordinates
+Note: canvas Y increases from top to bottom, GL Y is bottom to top
+==============
+*/
+static void SCR_SetupProjToCanvasMap (canvasmap_t *remap)
+{
+	float	xmin, ymin, width, height;
+
+	width = r_refdef.vrect.width / (float)glwidth * (glcanvas.right - glcanvas.left);
+	height = r_refdef.vrect.height / (float)glheight * (glcanvas.top - glcanvas.bottom);
+	xmin = glcanvas.left + (r_refdef.vrect.x / (float)glwidth) * (glcanvas.right - glcanvas.left);
+	ymin = glcanvas.bottom - ((glheight - r_refdef.vrect.y - r_refdef.vrect.height) / (float)glheight) * (glcanvas.bottom - glcanvas.top);
+
+	remap->scale[0]  = width * 0.5f;
+	remap->offset[0] = width * 0.5f + xmin;
+	remap->scale[1]  = height * 0.5f;
+	remap->offset[1] = height * 0.5f + ymin;
+}
+
+/*
+==============
+SCR_ProjToCanvas
+==============
+*/
+static void SCR_ProjToCanvas (const vec3_t proj, const canvasmap_t *remap, float *outx, float *outy)
+{
+	*outx = proj[0] * remap->scale[0] + remap->offset[0];
+	*outy = proj[1] * remap->scale[1] + remap->offset[1];
+}
+
+/*
+==============
+SCR_GetEntityBottom
+==============
+*/
+static void SCR_GetEntityBottom (const edict_t *ed, vec3_t pos)
+{
+	pos[0] = ed->v.origin[0] + (ed->v.mins[0] + ed->v.maxs[0]) * 0.5f;
+	pos[1] = ed->v.origin[1] + (ed->v.mins[1] + ed->v.maxs[1]) * 0.5f;
+	pos[2] = ed->v.origin[2] + ed->v.mins[2];
+
+	// If it's a point entity, move anchor point down by 8 units to avoid overlapping debug visualization
+	if (VectorCompare (ed->v.mins, ed->v.maxs))
+		pos[2] -= 8.f;
+}
+
+/*
+==============
+SCR_GetEntityCenter
+==============
+*/
+static void SCR_GetEntityCenter (const edict_t *ed, vec3_t pos)
+{
+	if (!VectorCompare (ed->v.mins, ed->v.maxs))
+	{
+		pos[0] = ed->v.origin[0] + (ed->v.mins[0] + ed->v.maxs[0]) * 0.5f;
+		pos[1] = ed->v.origin[1] + (ed->v.mins[1] + ed->v.maxs[1]) * 0.5f;
+		pos[2] = ed->v.origin[2] + (ed->v.mins[2] + ed->v.maxs[2]) * 0.5f;
+	}
+	else
+	{
+		VectorCopy (ed->v.origin, pos);
+	}
+}
+
+/*
+==============
+SCR_ClipToFrustum
+
+Clips the position to the view frustum towards a reference point.
+==============
+*/
+static void SCR_ClipToFrustum (vec3_t pos, const vec3_t ref)
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+	{
+		mplane_t *plane = &frustum[i];
+		float dist = DotProduct (plane->normal, pos) - plane->dist;
+		if (dist < 0.f)
+		{
+			float ref_dist = DotProduct (plane->normal, ref) - plane->dist;
+			if (ref_dist != dist)
+				VectorLerp (pos, ref, -dist / (ref_dist - dist), pos);
+		}
+	}
+}
+
+/*
+==============
+SCR_DrawKeyValueOverlay
+==============
+*/
+static void SCR_DrawKeyValueOverlay (float x, float y, const char *multistr, const vec3_t bgcolor)
+{
+	int			ofs, numlines, keylen, vallen, maxkey, maxval;
+	const char	*key, *val;
+
+	// Compute column widths and total number of lines
+	for (ofs = numlines = maxkey = maxval = 0; ofs < (int) VEC_SIZE (multistr); numlines++)
+	{
+		key = multistr + ofs;
+		keylen = (int) strlen (key);
+		ofs += keylen + 1;
+
+		val = multistr + ofs;
+		vallen = (int) strlen (val);
+		ofs += vallen + 1;
+
+		if (keylen == 0)
+		{
+			// empty key, value is printed centered
+			keylen = vallen * CHARSIZE / 2;
+			maxkey = q_max (maxkey, keylen);
+			maxval = q_max (maxval, keylen);
+		}
+		else
+		{
+			// key/value pair, we leave half a character on each side for spacing
+			maxkey = q_max (maxkey, keylen * CHARSIZE + CHARSIZE / 2);
+			maxval = q_max (maxval, vallen * CHARSIZE + CHARSIZE / 2);
+		}
+	}
+
+	// Try to keep as much text as possible on screen
+	if (y > glcanvas.bottom - numlines * CHARSIZE)
+		y = glcanvas.bottom - numlines * CHARSIZE;
+	if (y < glcanvas.top)
+		y = glcanvas.top;
+	if (x > glcanvas.right - maxval)
+		x = glcanvas.right - maxval;
+	if (x < glcanvas.left + maxkey)
+		x = glcanvas.left + maxkey;
+
+	// Draw background box
+	Draw_FillEx (x - maxkey, y, maxkey + maxval, numlines * CHARSIZE, bgcolor, 0.75f);
+
+	// Print each line
+	for (ofs = 0; ofs < (int) VEC_SIZE (multistr); y += CHARSIZE)
+	{
+		key = multistr + ofs;
+		keylen = (int) strlen (key);
+		ofs += keylen + 1;
+
+		val = multistr + ofs;
+		vallen = (int) strlen (val);
+		ofs += vallen + 1;
+
+		if (keylen == 0)
+		{
+			// empty key, center-print the value
+			Draw_StringEx (x - vallen * CHARSIZE / 2, y, CHARSIZE, val);
+		}
+		else
+		{
+			// key/value pair, leave half a character on each side for spacing
+			Draw_StringEx (x - CHARSIZE / 2 - keylen * CHARSIZE, y, CHARSIZE, key);
+			Draw_StringEx (x + CHARSIZE / 2, y, CHARSIZE, val);
+		}
+	}
+}
+
+/*
+==============
+SCR_DrawEdictInfo
+
+Show info for the highlighted entity with r_showfields/r_showbboxes
+==============
+*/
+
+static char *scr_edictoverlaystrings = NULL;
+
+void SCR_DrawEdictInfo (void)
+{
+	char		tinted[1024];
+	int			i;
+	float		x, y;
+	canvasmap_t	proj2canvas;
+	vec3_t		crosshair, focus, anchor, proj, bgcolor;
+	edict_t		*ed;
+
+	if (VEC_SIZE (bbox_linked) == 0)
+		return;
+
+	GL_SetCanvas (CANVAS_MENU);
+	SCR_SetupProjToCanvasMap (&proj2canvas);
+
+	PR_SwitchQCVM (&sv.qcvm);
+
+	VectorMA (r_origin, 8.f, vpn, crosshair);
+	SCR_GetEntityCenter (bbox_linked[0], focus);
+	SCR_ClipToFrustum (focus, crosshair);
+
+	// Show edict numbers and classnames for all highlighted entities.
+	// Note: reversed order, so that the focused entity is drawn last,
+	// on top of all the others.
+	for (i = (int) VEC_SIZE (bbox_linked) - 1; i >= 0; i--)
+	{
+		ed = bbox_linked[i];
+
+		// Compute anchor point
+		if (i == 0)
+		{
+			// With r_showfields < 0 the field overlay tracks the focused entity,
+			// so we disable the simple one (number + classname) to avoid overlap.
+			if (r_showfields.value < 0.f)
+				continue;
+			//SCR_GetEntityBottom (ed, anchor);
+			SCR_GetEntityCenter (ed, anchor);
+			SCR_ClipToFrustum (anchor, crosshair);
+		}
+		else
+		{
+			SCR_GetEntityCenter (ed, anchor);
+			SCR_ClipToFrustum (anchor, focus);
+		}
+		ProjectVector (anchor, r_matviewproj, proj);
+		SCR_ProjToCanvas (proj, &proj2canvas, &x, &y);
+
+		// Simple overlay: centered edict number and classname (if not empty)
+		VEC_CLEAR (scr_edictoverlaystrings);
+		MultiString_Append (&scr_edictoverlaystrings, "");
+		MultiString_Append (&scr_edictoverlaystrings, va ("edict %d", NUM_FOR_EDICT (ed)));
+		if (ed->v.classname)
+		{
+			MultiString_Append (&scr_edictoverlaystrings, "");
+			MultiString_Append (&scr_edictoverlaystrings, PR_GetString (ed->v.classname));
+		}
+
+		// Set background color based on link type
+		switch (ed->showbboxflags)
+		{
+		default:
+		case SHOWBBOX_LINK_NONE:		VectorSet (bgcolor, 0.f,	0.f,	0.f); break;
+		case SHOWBBOX_LINK_INCOMING:	VectorSet (bgcolor, 0.25f,	0.125f,	0.125f); break;
+		case SHOWBBOX_LINK_OUTGOING:	VectorSet (bgcolor, 0.125f,	0.125f,	0.25f); break;
+		case SHOWBBOX_LINK_BOTH:		VectorSet (bgcolor, 0.25f,	0.125f,	0.25f); break;
+		}
+
+		SCR_DrawKeyValueOverlay (x, y, scr_edictoverlaystrings, bgcolor);
+	}
+
+	// Show all relevant entity fields for the highlighted entity (first in bbox_linked)
+	if (r_showfields.value)
+	{
+		ed = bbox_linked[0];
+
+		// Compute anchor point
+		SCR_GetEntityBottom (ed, anchor);
+		ProjectVector (anchor, r_matviewproj, proj);
+		SCR_ProjToCanvas (proj, &proj2canvas, &x, &y);
+
+		// r_showfields > 0 locks the overlay to the bottom-right
+		if (r_showfields.value > 0.f)
+		{
+			x = glcanvas.right;
+			y = glcanvas.bottom;
+		}
+
+		// Build overlay text: first 2 lines are entity number and classname
+		VEC_CLEAR (scr_edictoverlaystrings);
+		MultiString_Append (&scr_edictoverlaystrings, "Edict");
+		MultiString_Append (&scr_edictoverlaystrings, va ("%d", NUM_FOR_EDICT (ed)));
+		COM_TintString ("classname", tinted, sizeof (tinted));
+		MultiString_Append (&scr_edictoverlaystrings, tinted);
+		MultiString_Append (&scr_edictoverlaystrings, PR_GetString (ed->v.classname));
+
+		// Add all relevant fields, excluding classname (already added to the header)
+		for (i = 1; i < qcvm->progs->numfielddefs; i++)
+		{
+			ddef_t *d = &qcvm->fielddefs[i];
+			if (d->ofs*4 == offsetof (entvars_t, classname) || !ED_IsRelevantField (ed, d))
+				continue;
+			COM_TintString (PR_GetString (d->s_name), tinted, sizeof (tinted));
+			MultiString_Append (&scr_edictoverlaystrings, tinted);
+			MultiString_Append (&scr_edictoverlaystrings, ED_FieldValueString (ed, d));
+		}
+
+		SCR_DrawKeyValueOverlay (x, y, scr_edictoverlaystrings, rgb_black);
+	}
+
+	PR_SwitchQCVM (NULL);
+}
 
 
 //=============================================================================
@@ -1529,11 +1979,13 @@ void SCR_UpdateScreen (void)
 	else if (cl.intermission == 1 && key_dest == key_game) //end of level
 	{
 		Sbar_IntermissionOverlay ();
+		SCR_DrawDemoControls ();
 	}
 	else if (cl.intermission == 2 && key_dest == key_game) //end of episode
 	{
 		Sbar_FinaleOverlay ();
 		SCR_CheckDrawCenterString ();
+		SCR_DrawDemoControls ();
 	}
 	else
 	{
@@ -1545,7 +1997,9 @@ void SCR_UpdateScreen (void)
 		Sbar_Draw ();
 		SCR_DrawDevStats (); //johnfitz
 		SCR_DrawClock (); //johnfitz
+		SCR_DrawDemoControls ();
 		SCR_DrawSpeed ();
+		SCR_DrawEdictInfo ();
 		SCR_DrawConsole ();
 		M_Draw ();
 		SCR_DrawFPS (); //johnfitz

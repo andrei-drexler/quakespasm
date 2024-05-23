@@ -1642,7 +1642,8 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 {
 	byte	translation[256];
 	byte	*src, *dst, *data = NULL, *translated;
-	int	mark, size, i;
+	int		mark, size, i;
+	enum srcformat fmt = glt->source_format;
 
 //
 // get source data
@@ -1673,7 +1674,7 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 		}
 	}
 	else if (glt->source_file[0] && !glt->source_offset) {
-		data = Image_LoadImage (glt->source_file, (int *)&glt->source_width, (int *)&glt->source_height); //simple file
+		data = Image_LoadImage (glt->source_file, (int *)&glt->source_width, (int *)&glt->source_height, &fmt); //simple file
 	}
 	else if (!glt->source_file[0] && glt->source_offset) {
 		data = (byte *) glt->source_offset; //image in memory
@@ -1683,6 +1684,9 @@ invalid:	Con_Printf ("TexMgr_ReloadImage: invalid source for %s\n", glt->name);
 		Hunk_FreeToLowMark(mark);
 		return;
 	}
+
+	if (fmt != glt->source_format)
+		Sys_Error ("Texture %s changed format from %i to %i", glt->name, glt->source_format, fmt);
 
 	glt->width = glt->source_width;
 	glt->height = glt->source_height;

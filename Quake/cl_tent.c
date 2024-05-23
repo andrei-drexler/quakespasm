@@ -79,6 +79,7 @@ void CL_ParseBeam (qmodel_t *m)
 		{
 			b->entity = ent;
 			b->model = m;
+			b->starttime = cl.time - 0.001;
 			b->endtime = cl.time + 0.2;
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
@@ -88,10 +89,11 @@ void CL_ParseBeam (qmodel_t *m)
 // find a free beam
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
 	{
-		if (!b->model || b->endtime < cl.time)
+		if (!b->model || b->starttime > cl.time || b->endtime < cl.time)
 		{
 			b->entity = ent;
 			b->model = m;
+			b->starttime = cl.time - 0.001;
 			b->endtime = cl.time + 0.2;
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
@@ -306,7 +308,7 @@ void CL_UpdateTEnts (void)
 // update lightning
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
 	{
-		if (!b->model || b->endtime < cl.time)
+		if (!b->model || b->starttime > cl.time || b->endtime < cl.time)
 			continue;
 
 	// if coming from the player, update the start position

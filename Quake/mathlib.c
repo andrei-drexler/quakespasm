@@ -112,6 +112,7 @@ Returns 1, 2, or 1 + 2
 int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, mplane_t *p)
 {
 	float	dist1, dist2;
+	int		xneg, yneg, zneg;
 	int		sides;
 
 #if 0	// this is done by the BOX_ON_PLANE_SIDE macro before calling this
@@ -127,46 +128,19 @@ int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, mplane_t *p)
 	}
 #endif
 
-// general case
-	switch (p->signbits)
-	{
-	case 0:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		break;
-	case 1:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		break;
-	case 2:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		break;
-	case 3:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		break;
-	case 4:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		break;
-	case 5:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		break;
-	case 6:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		break;
-	case 7:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		break;
-	default:
-		dist1 = dist2 = 0;		// shut up compiler
+	xneg = p->signbits & 1;
+	yneg = (p->signbits >> 1) & 1;
+	zneg = (p->signbits >> 2) & 1;
+
+	dist1 = p->normal[0] * (xneg ? emins : emaxs)[0] +
+			p->normal[1] * (yneg ? emins : emaxs)[1] +
+			p->normal[2] * (zneg ? emins : emaxs)[2];
+	dist2 = p->normal[0] * (xneg ? emaxs : emins)[0] +
+			p->normal[1] * (yneg ? emaxs : emins)[1] +
+			p->normal[2] * (zneg ? emaxs : emins)[2];
+
+	if (p->signbits & ~7)
 		Sys_Error ("BoxOnPlaneSide:  Bad signbits");
-		break;
-	}
 
 #if 0
 	int		i;
@@ -248,7 +222,7 @@ void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	up[2] = cr*cp;
 }
 
-int VectorCompare (vec3_t v1, vec3_t v2)
+int VectorCompare (const vec3_t v1, const vec3_t v2)
 {
 	int		i;
 
@@ -264,6 +238,13 @@ void VectorMA (const vec3_t veca, float scale, const vec3_t vecb, vec3_t vecc)
 	vecc[0] = veca[0] + scale*vecb[0];
 	vecc[1] = veca[1] + scale*vecb[1];
 	vecc[2] = veca[2] + scale*vecb[2];
+}
+
+void VectorLerp (const vec3_t veca, const vec3_t vecb, float frac, vec3_t dst)
+{
+	dst[0] = LERP (veca[0], vecb[0], frac);
+	dst[1] = LERP (veca[1], vecb[1], frac);
+	dst[2] = LERP (veca[2], vecb[2], frac);
 }
 
 
@@ -775,6 +756,43 @@ void ApplyTranslation(float matrix[16], float x, float y, float z)
 #endif
 }
 
+/*
+=============
+ProjectVector
+=============
+*/
+void ProjectVector(const vec3_t src, const float matrix[16], vec3_t dst)
+{
+	float z;
+	vec4_t proj;
+
+	proj[0] = matrix[3*4 + 0];
+	proj[1] = matrix[3*4 + 1];
+	proj[2] = matrix[3*4 + 2];
+	proj[3] = matrix[3*4 + 3];
+
+	proj[0] += src[0]*matrix[0*4 + 0];
+	proj[1] += src[0]*matrix[0*4 + 1];
+	proj[2] += src[0]*matrix[0*4 + 2];
+	proj[3] += src[0]*matrix[0*4 + 3];
+
+	proj[0] += src[1]*matrix[1*4 + 0];
+	proj[1] += src[1]*matrix[1*4 + 1];
+	proj[2] += src[1]*matrix[1*4 + 2];
+	proj[3] += src[1]*matrix[1*4 + 3];
+
+	proj[0] += src[2]*matrix[2*4 + 0];
+	proj[1] += src[2]*matrix[2*4 + 1];
+	proj[2] += src[2]*matrix[2*4 + 2];
+	proj[3] += src[2]*matrix[2*4 + 3];
+
+	z = fabs (proj[3]);
+
+	dst[0] = proj[0] / z;
+	dst[1] = proj[1] / z;
+	dst[2] = proj[3];
+}
+
 void MatrixTranspose4x3(const float src[16], float dst[12])
 {
 	#define COPY_ROW(row)					\
@@ -788,4 +806,34 @@ void MatrixTranspose4x3(const float src[16], float dst[12])
 	COPY_ROW (2);
 
 	#undef COPY_ROW
+}
+
+qboolean RayVsBox (const vec3_t org, const vec3_t rcpdelta, const vec3_t mins, const vec3_t maxs, float *frac)
+{
+	int		i;
+	float	enter, exit;
+
+	if (frac)
+		*frac = 1.f;
+
+	enter = 0.f;
+	exit = 1.f;
+
+	for (i = 0; i < 3; i++)
+	{
+		float t0 = (mins[i] - org[i]) * rcpdelta[i];
+		float t1 = (maxs[i] - org[i]) * rcpdelta[i];
+		float tmin = q_min (t0, t1);
+		float tmax = q_max (t0, t1);
+		enter = q_max (enter, tmin);
+		exit = q_min (exit, tmax);
+	}
+
+	if (enter > exit)
+		return false;
+
+	if (frac)
+		*frac = enter;
+
+	return true;
 }

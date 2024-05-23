@@ -26,139 +26,113 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 // these are the key numbers that should be passed to Key_Event
 //
-#define	K_TAB			9
-#define	K_ENTER			13
-#define	K_ESCAPE		27
-#define	K_SPACE			32
+typedef enum keycode_t
+{
+	K_TAB				= 9,
+	K_ENTER				= 13,
+	K_ESCAPE			= 27,
+	K_SPACE				= 32,
 
 // normal keys should be passed as lowercased ascii
 
-#define	K_BACKSPACE		127
-#define	K_UPARROW		128
-#define	K_DOWNARROW		129
-#define	K_LEFTARROW		130
-#define	K_RIGHTARROW	131
+	K_BACKSPACE			= 127,
+	K_UPARROW,
+	K_DOWNARROW,
+	K_LEFTARROW,
+	K_RIGHTARROW,
 
-#define	K_ALT			132
-#define	K_CTRL			133
-#define	K_SHIFT			134
-#define	K_F1			135
-#define	K_F2			136
-#define	K_F3			137
-#define	K_F4			138
-#define	K_F5			139
-#define	K_F6			140
-#define	K_F7			141
-#define	K_F8			142
-#define	K_F9			143
-#define	K_F10			144
-#define	K_F11			145
-#define	K_F12			146
-#define	K_INS			147
-#define	K_DEL			148
-#define	K_PGDN			149
-#define	K_PGUP			150
-#define	K_HOME			151
-#define	K_END			152
+	K_ALT,
+	K_CTRL,
+	K_SHIFT,
+	K_F1,
+	K_F2,
+	K_F3,
+	K_F4,
+	K_F5,
+	K_F6,
+	K_F7,
+	K_F8,
+	K_F9,
+	K_F10,
+	K_F11,
+	K_F12,
+	K_INS,
+	K_DEL,
+	K_PGDN,
+	K_PGUP,
+	K_HOME,
+	K_END,
 
-#define	K_KP_NUMLOCK		153
-#define	K_KP_SLASH		154
-#define	K_KP_STAR		155
-#define	K_KP_MINUS		156
-#define	K_KP_HOME		157
-#define	K_KP_UPARROW		158
-#define	K_KP_PGUP		159
-#define	K_KP_PLUS		160
-#define	K_KP_LEFTARROW		161
-#define	K_KP_5			162
-#define	K_KP_RIGHTARROW		163
-#define	K_KP_END		164
-#define	K_KP_DOWNARROW		165
-#define	K_KP_PGDN		166
-#define	K_KP_ENTER		167
-#define	K_KP_INS		168
-#define	K_KP_DEL		169
+	K_KP_NUMLOCK,
+	K_KP_SLASH,
+	K_KP_STAR,
+	K_KP_MINUS,
+	K_KP_HOME,
+	K_KP_UPARROW,
+	K_KP_PGUP,
+	K_KP_PLUS,
+	K_KP_LEFTARROW,
+	K_KP_5,
+	K_KP_RIGHTARROW,
+	K_KP_END,
+	K_KP_DOWNARROW,
+	K_KP_PGDN,
+	K_KP_ENTER,
+	K_KP_INS,
+	K_KP_DEL,
 
-#define	K_COMMAND		170
+	K_COMMAND,
 
-#define K_CAPSLOCK		171
-#define K_SCROLLLOCK	172
-#define K_PRINTSCREEN	173
-
-#define K_PAUSE			255
+	K_CAPSLOCK,
+	K_SCROLLLOCK,
+	K_PRINTSCREEN,
 
 //
 // mouse buttons generate virtual keys
 //
-#define	K_MOUSE1		200
-#define	K_MOUSE2		201
-#define	K_MOUSE3		202
-
-//
-// joystick buttons
-//
-#define	K_JOY1			203
-#define	K_JOY2			204
-#define	K_JOY3			205
-#define	K_JOY4			206
-// aux keys are for multi-buttoned joysticks to generate so they can use
-// the normal binding process
-// aux29-32: reserved for the HAT (POV) switch motion
-#define	K_AUX1			207
-#define	K_AUX2			208
-#define	K_AUX3			209
-#define	K_AUX4			210
-#define	K_AUX5			211
-#define	K_AUX6			212
-#define	K_AUX7			213
-#define	K_AUX8			214
-#define	K_AUX9			215
-#define	K_AUX10			216
-#define	K_AUX11			217
-#define	K_AUX12			218
-#define	K_AUX13			219
-#define	K_AUX14			220
-#define	K_AUX15			221
-#define	K_AUX16			222
-#define	K_AUX17			223
-#define	K_AUX18			224
-#define	K_AUX19			225
-#define	K_AUX20			226
-#define	K_AUX21			227
-#define	K_AUX22			228
-#define	K_AUX23			229
-#define	K_AUX24			230
-#define	K_AUX25			231
-#define	K_AUX26			232
-#define	K_AUX27			233
-#define	K_AUX28			234
-#define	K_AUX29			235
-#define	K_AUX30			236
-#define	K_AUX31			237
-#define	K_AUX32			238
-
-// JACK: Intellimouse(c) Mouse Wheel Support
-
-#define K_MWHEELUP		239
-#define K_MWHEELDOWN		240
+	K_MOUSE1			= 200,
+	K_MOUSE2,
+	K_MOUSE3,
 
 // thumb buttons
-#define K_MOUSE4		241
-#define K_MOUSE5		242
+	K_MOUSE4,
+	K_MOUSE5,
+
+// JACK: Intellimouse(c) Mouse Wheel Support
+	K_MWHEELUP,
+	K_MWHEELDOWN,
 
 // SDL2 game controller keys
-#define K_LTHUMB		243
-#define K_RTHUMB		244
-#define K_LSHOULDER		245
-#define K_RSHOULDER		246
-#define K_ABUTTON		247
-#define K_BBUTTON		248
-#define K_XBUTTON		249
-#define K_YBUTTON		250
-#define K_LTRIGGER		251
-#define K_RTRIGGER		252
+	K_GAMEPAD_BEGIN,
+	K_LTHUMB = K_GAMEPAD_BEGIN,
+	K_RTHUMB,
+	K_LSHOULDER,
+	K_RSHOULDER,
+	K_DPAD_UP,
+	K_DPAD_DOWN,
+	K_DPAD_LEFT,
+	K_DPAD_RIGHT,
+	K_ABUTTON,
+	K_BBUTTON,
+	K_XBUTTON,
+	K_YBUTTON,
+	K_LTRIGGER,
+	K_RTRIGGER,
+	K_MISC1,
+	K_PADDLE1,
+	K_PADDLE2,
+	K_PADDLE3,
+	K_PADDLE4,
+	K_TOUCHPAD,
+	K_GAMEPAD_END,
+
+	K_PAUSE = K_GAMEPAD_END,
+
+	NUM_KEYCODES,
+} keycode_t;
 
 #define	MAX_KEYS		256
+COMPILE_TIME_ASSERT (too_many_keycodes, NUM_KEYCODES <= MAX_KEYS);
 
 #define	MAXCMDLINE	256
 
