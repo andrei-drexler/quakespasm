@@ -444,6 +444,8 @@ void R_DrawSpriteModels_ShowTris (entity_t **ents, int count);
 
 entity_t **R_GetVisEntities (modtype_t type, qboolean translucent, int *outcount);
 
+void R_ClearBoundingBoxes (void);
+
 #define MAX_BMODEL_DRAWS		4096
 #define MAX_BMODEL_INSTANCES	1024
 
@@ -475,6 +477,7 @@ void GL_BuildLightmaps (void);
 void GL_DeleteBModelBuffers (void);
 void GL_BuildBModelVertexBuffer (void);
 void GL_BuildBModelMarkBuffers (void);
+void GLMesh_LoadVertexBuffer (qmodel_t *m, aliashdr_t *hdr);
 void GLMesh_LoadVertexBuffers (void);
 void GLMesh_DeleteVertexBuffers (void);
 
@@ -503,7 +506,7 @@ typedef struct glprogs_s {
 	GLuint		skylayers[2];		// [dither]
 	GLuint		skycubemap[2][2];	// [anim][dither]
 	GLuint		skyboxside[2];		// [dither]
-	GLuint		alias[2][3][2];		// [OIT][mode:standard/dithered/noperspective][alpha test]
+	GLuint		alias[2][3][2][2];	// [OIT][mode:standard/dithered/noperspective][alpha test][md5]
 	GLuint		sprites[2];			// [dither]
 	GLuint		particles[2][2];	// [OIT][dither]
 	GLuint		debug3d;

@@ -53,6 +53,7 @@ CPUFLAGS=
 LDFLAGS?= -m32 -mwindows -static-libgcc
 DFLAGS ?=
 CFLAGS ?= -m32 -Wall -Wno-trigraphs
+CFLAGS += -D_FILE_OFFSET_BITS=64
 CFLAGS += $(call check_gcc,-std=gnu11,)
 CFLAGS += $(call check_gcc,-Werror=format,)
 CFLAGS += $(CPUFLAGS)

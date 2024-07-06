@@ -294,15 +294,15 @@ void R_FlushAliasInstances (void)
 {
 	qmodel_t	*model;
 	aliashdr_t	*paliashdr;
-	qboolean	alphatest, translucent, oit;
+	qboolean	alphatest, translucent, oit, md5;
 	GLuint		program;
 	unsigned	state;
 	GLuint		buf;
 	GLbyte		*ofs;
 	size_t		ibuf_size;
-	GLuint		buffers[3];
-	GLintptr	offsets[3];
-	GLsizeiptr	sizes[3];
+	GLuint		buffers[2];
+	GLintptr	offsets[2];
+	GLsizeiptr	sizes[2];
 
 	if (!ibuf.count)
 		return;
@@ -312,24 +312,30 @@ void R_FlushAliasInstances (void)
 
 	GL_BeginGroup (model->name);
 
+	md5 = paliashdr->poseverttype == PV_IQM;
+
 	alphatest = model->flags & MF_HOLEY ? 1 : 0;
 	translucent = !ENTALPHA_OPAQUE (ibuf.ent->alpha);
 	oit = translucent && r_oit.value != 0.f;
 	switch (softemu)
 	{
 	case SOFTEMU_BANDED:
-		program = glprogs.alias[oit][ALIASSHADER_NOPERSP][alphatest];
+		program = glprogs.alias[oit][ALIASSHADER_NOPERSP][alphatest][md5];
 		break;
 	case SOFTEMU_COARSE:
-		program = glprogs.alias[oit][ALIASSHADER_DITHER][alphatest];
+		program = glprogs.alias[oit][ALIASSHADER_DITHER][alphatest][md5];
 		break;
 	default:
-		program = glprogs.alias[oit][ALIASSHADER_STANDARD][alphatest];
+		program = glprogs.alias[oit][ALIASSHADER_STANDARD][alphatest][md5];
 		break;
 	}
 	GL_UseProgram (program);
 
-	state = GLS_CULL_BACK | GLS_ATTRIBS(0);
+	if (md5)
+		state = GLS_CULL_BACK | GLS_ATTRIBS(5);
+	else
+		state = GLS_CULL_BACK | GLS_ATTRIBS(1);
+
 	if (!translucent)
 		state |= GLS_BLEND_OPAQUE;
 	else
@@ -350,20 +356,40 @@ void R_FlushAliasInstances (void)
 	GL_Upload (GL_SHADER_STORAGE_BUFFER, &ibuf.global, ibuf_size, &buf, &ofs);
 
 	buffers[0] = buf;
-	buffers[1] = model->meshvbo;
-	buffers[2] = model->meshvbo;
 	offsets[0] = (GLintptr) ofs;
-	offsets[1] = model->vboxyzofs;
-	offsets[2] = model->vbostofs;
 	sizes[0] = ibuf_size;
-	sizes[1] = sizeof (meshxyz_t) * paliashdr->numverts_vbo * paliashdr->numposes;
-	sizes[2] = sizeof (meshst_t) * paliashdr->numverts_vbo;
-	GL_BindBuffersRange (GL_SHADER_STORAGE_BUFFER, 1, 3, buffers, offsets, sizes);
+
+	GL_BindBuffer (GL_ARRAY_BUFFER, model->meshvbo);
+
+	if (md5)
+	{
+		GL_VertexAttribPointerFunc  (0, 3, GL_FLOAT,			GL_FALSE, sizeof (iqmvert_t), (void *) (paliashdr->vbovertofs + offsetof (iqmvert_t, xyz)));
+		GL_VertexAttribPointerFunc  (1, 4, GL_BYTE,				GL_TRUE,  sizeof (iqmvert_t), (void *) (paliashdr->vbovertofs + offsetof (iqmvert_t, norm)));
+		GL_VertexAttribPointerFunc  (2, 2, GL_FLOAT,			GL_FALSE, sizeof (iqmvert_t), (void *) (paliashdr->vbovertofs + offsetof (iqmvert_t, st)));
+		GL_VertexAttribPointerFunc  (3, 4, GL_UNSIGNED_BYTE,	GL_TRUE,  sizeof (iqmvert_t), (void *) (paliashdr->vbovertofs + offsetof (iqmvert_t, weight)));
+		GL_VertexAttribIPointerFunc (4, 4, GL_UNSIGNED_BYTE,	          sizeof (iqmvert_t), (void *) (paliashdr->vbovertofs + offsetof (iqmvert_t, idx)));
+
+		buffers[1] = model->meshvbo;
+		offsets[1] = paliashdr->vboposeofs;
+		sizes[1] = sizeof (bonepose_t) * paliashdr->numbones * paliashdr->numboneposes;
+
+		GL_BindBuffersRange (GL_SHADER_STORAGE_BUFFER, 1, 2, buffers, offsets, sizes);
+	}
+	else
+	{
+		GL_VertexAttribPointerFunc (0, 2, GL_FLOAT, GL_FALSE, sizeof (meshst_t), (void *) paliashdr->vbostofs);
+
+		buffers[1] = model->meshvbo;
+		offsets[1] = paliashdr->vbovertofs;
+		sizes[1] = sizeof (meshxyz_t) * paliashdr->numverts_vbo * paliashdr->numposes;
+
+		GL_BindBuffersRange (GL_SHADER_STORAGE_BUFFER, 1, 2, buffers, offsets, sizes);
+	}
 
 	GL_BindTextures (0, 2, ibuf.textures);
 
 	GL_BindBuffer (GL_ELEMENT_ARRAY_BUFFER, model->meshindexesvbo);
-	GL_DrawElementsInstancedFunc (GL_TRIANGLES, paliashdr->numindexes, GL_UNSIGNED_SHORT, (void *)(intptr_t)model->vboindexofs, ibuf.count);
+	GL_DrawElementsInstancedFunc (GL_TRIANGLES, paliashdr->numindexes, GL_UNSIGNED_SHORT, (void *)paliashdr->eboofs, ibuf.count);
 
 	rs_aliaspasses += paliashdr->numtris * ibuf.count;
 	ibuf.count = 0;
@@ -390,6 +416,7 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 	// setup pose/lerp data -- do it first so we don't miss updates due to culling
 	//
 	paliashdr = (aliashdr_t *)Mod_Extradata (e->model);
+
 	R_SetupAliasFrame (e, paliashdr, &lerpdata);
 	R_SetupEntityTransform (e, &lerpdata);
 
@@ -503,9 +530,20 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 	instance->lightcolor[1] = lightcolor[1];
 	instance->lightcolor[2] = lightcolor[2];
 	instance->alpha = entalpha;
-	instance->pose1 = lerpdata.pose1 * paliashdr->numverts_vbo;
-	instance->pose2 = lerpdata.pose2 * paliashdr->numverts_vbo;
+	instance->pose1 = lerpdata.pose1;
+	instance->pose2 = lerpdata.pose2;
 	instance->blend = lerpdata.blend;
+
+	if (paliashdr->poseverttype == PV_QUAKE1)
+	{
+		instance->pose1 *= paliashdr->numverts_vbo;
+		instance->pose2 *= paliashdr->numverts_vbo;
+	}
+	else
+	{
+		instance->pose1 *= paliashdr->numbones;
+		instance->pose2 *= paliashdr->numbones;
+	}
 }
 
 /*

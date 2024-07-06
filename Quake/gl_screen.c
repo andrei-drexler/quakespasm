@@ -116,6 +116,9 @@ extern	cvar_t	crosshair;
 extern	cvar_t	con_notifyfade;
 extern	cvar_t	con_notifyfadetime;
 
+extern	edict_t	**bbox_linked;
+extern	cvar_t	r_showfields;
+
 qboolean	scr_initialized;		// ready to draw
 
 qpic_t		*scr_net;
@@ -793,7 +796,7 @@ void SCR_DrawDemoControls (void)
 	// Approximate the fraction of the demo that's already been played back
 	// based on the current file offset and total demo size
 	// Note: we need to take into account the starting offset for pak files
-	frac = (ftell (cls.demofile) - cls.demofilestart) / (double)cls.demofilesize;
+	frac = (Sys_ftell (cls.demofile) - cls.demofilestart) / (double)cls.demofilesize;
 	frac = CLAMP (0.f, frac, 1.f);
 
 	if (cl.intermission)
@@ -1046,6 +1049,300 @@ void SCR_DrawCrosshair (void)
 	Draw_Character(-4, -4, crosshair_char);
 }
 
+typedef struct
+{
+	float	scale[2];
+	float	offset[2];
+} canvasmap_t;
+
+/*
+==============
+SCR_SetupProjToCanvasMap
+
+Computes mapping from NDC coordinates (-1..1) to canvas coordinates
+Note: canvas Y increases from top to bottom, GL Y is bottom to top
+==============
+*/
+static void SCR_SetupProjToCanvasMap (canvasmap_t *remap)
+{
+	float	xmin, ymin, width, height;
+
+	width = r_refdef.vrect.width / (float)glwidth * (glcanvas.right - glcanvas.left);
+	height = r_refdef.vrect.height / (float)glheight * (glcanvas.top - glcanvas.bottom);
+	xmin = glcanvas.left + (r_refdef.vrect.x / (float)glwidth) * (glcanvas.right - glcanvas.left);
+	ymin = glcanvas.bottom - ((glheight - r_refdef.vrect.y - r_refdef.vrect.height) / (float)glheight) * (glcanvas.bottom - glcanvas.top);
+
+	remap->scale[0]  = width * 0.5f;
+	remap->offset[0] = width * 0.5f + xmin;
+	remap->scale[1]  = height * 0.5f;
+	remap->offset[1] = height * 0.5f + ymin;
+}
+
+/*
+==============
+SCR_ProjToCanvas
+==============
+*/
+static void SCR_ProjToCanvas (const vec3_t proj, const canvasmap_t *remap, float *outx, float *outy)
+{
+	*outx = proj[0] * remap->scale[0] + remap->offset[0];
+	*outy = proj[1] * remap->scale[1] + remap->offset[1];
+}
+
+/*
+==============
+SCR_GetEntityBottom
+==============
+*/
+static void SCR_GetEntityBottom (const edict_t *ed, vec3_t pos)
+{
+	pos[0] = ed->v.origin[0] + (ed->v.mins[0] + ed->v.maxs[0]) * 0.5f;
+	pos[1] = ed->v.origin[1] + (ed->v.mins[1] + ed->v.maxs[1]) * 0.5f;
+	pos[2] = ed->v.origin[2] + ed->v.mins[2];
+
+	// If it's a point entity, move anchor point down by 8 units to avoid overlapping debug visualization
+	if (VectorCompare (ed->v.mins, ed->v.maxs))
+		pos[2] -= 8.f;
+}
+
+/*
+==============
+SCR_GetEntityCenter
+==============
+*/
+static void SCR_GetEntityCenter (const edict_t *ed, vec3_t pos)
+{
+	if (!VectorCompare (ed->v.mins, ed->v.maxs))
+	{
+		pos[0] = ed->v.origin[0] + (ed->v.mins[0] + ed->v.maxs[0]) * 0.5f;
+		pos[1] = ed->v.origin[1] + (ed->v.mins[1] + ed->v.maxs[1]) * 0.5f;
+		pos[2] = ed->v.origin[2] + (ed->v.mins[2] + ed->v.maxs[2]) * 0.5f;
+	}
+	else
+	{
+		VectorCopy (ed->v.origin, pos);
+	}
+}
+
+/*
+==============
+SCR_ClipToFrustum
+
+Clips the position to the view frustum towards a reference point.
+==============
+*/
+static void SCR_ClipToFrustum (vec3_t pos, const vec3_t ref)
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+	{
+		mplane_t *plane = &frustum[i];
+		float dist = DotProduct (plane->normal, pos) - plane->dist;
+		if (dist < 0.f)
+		{
+			float ref_dist = DotProduct (plane->normal, ref) - plane->dist;
+			if (ref_dist != dist)
+				VectorLerp (pos, ref, -dist / (ref_dist - dist), pos);
+		}
+	}
+}
+
+/*
+==============
+SCR_DrawKeyValueOverlay
+==============
+*/
+static void SCR_DrawKeyValueOverlay (float x, float y, const char *multistr, const vec3_t bgcolor)
+{
+	int			ofs, numlines, keylen, vallen, maxkey, maxval;
+	const char	*key, *val;
+
+	// Compute column widths and total number of lines
+	for (ofs = numlines = maxkey = maxval = 0; ofs < (int) VEC_SIZE (multistr); numlines++)
+	{
+		key = multistr + ofs;
+		keylen = (int) strlen (key);
+		ofs += keylen + 1;
+
+		val = multistr + ofs;
+		vallen = (int) strlen (val);
+		ofs += vallen + 1;
+
+		if (keylen == 0)
+		{
+			// empty key, value is printed centered
+			keylen = vallen * CHARSIZE / 2;
+			maxkey = q_max (maxkey, keylen);
+			maxval = q_max (maxval, keylen);
+		}
+		else
+		{
+			// key/value pair, we leave half a character on each side for spacing
+			maxkey = q_max (maxkey, keylen * CHARSIZE + CHARSIZE / 2);
+			maxval = q_max (maxval, vallen * CHARSIZE + CHARSIZE / 2);
+		}
+	}
+
+	// Try to keep as much text as possible on screen
+	if (y > glcanvas.bottom - numlines * CHARSIZE)
+		y = glcanvas.bottom - numlines * CHARSIZE;
+	if (y < glcanvas.top)
+		y = glcanvas.top;
+	if (x > glcanvas.right - maxval)
+		x = glcanvas.right - maxval;
+	if (x < glcanvas.left + maxkey)
+		x = glcanvas.left + maxkey;
+
+	// Draw background box
+	Draw_FillEx (x - maxkey, y, maxkey + maxval, numlines * CHARSIZE, bgcolor, 0.75f);
+
+	// Print each line
+	for (ofs = 0; ofs < (int) VEC_SIZE (multistr); y += CHARSIZE)
+	{
+		key = multistr + ofs;
+		keylen = (int) strlen (key);
+		ofs += keylen + 1;
+
+		val = multistr + ofs;
+		vallen = (int) strlen (val);
+		ofs += vallen + 1;
+
+		if (keylen == 0)
+		{
+			// empty key, center-print the value
+			Draw_StringEx (x - vallen * CHARSIZE / 2, y, CHARSIZE, val);
+		}
+		else
+		{
+			// key/value pair, leave half a character on each side for spacing
+			Draw_StringEx (x - CHARSIZE / 2 - keylen * CHARSIZE, y, CHARSIZE, key);
+			Draw_StringEx (x + CHARSIZE / 2, y, CHARSIZE, val);
+		}
+	}
+}
+
+/*
+==============
+SCR_DrawEdictInfo
+
+Show info for the highlighted entity with r_showfields/r_showbboxes
+==============
+*/
+
+static char *scr_edictoverlaystrings = NULL;
+
+void SCR_DrawEdictInfo (void)
+{
+	char		tinted[1024];
+	int			i;
+	float		x, y;
+	canvasmap_t	proj2canvas;
+	vec3_t		crosshair, focus, anchor, proj, bgcolor;
+	edict_t		*ed;
+
+	if (VEC_SIZE (bbox_linked) == 0)
+		return;
+
+	GL_SetCanvas (CANVAS_MENU);
+	SCR_SetupProjToCanvasMap (&proj2canvas);
+
+	PR_SwitchQCVM (&sv.qcvm);
+
+	VectorMA (r_origin, 8.f, vpn, crosshair);
+	SCR_GetEntityCenter (bbox_linked[0], focus);
+	SCR_ClipToFrustum (focus, crosshair);
+
+	// Show edict numbers and classnames for all highlighted entities.
+	// Note: reversed order, so that the focused entity is drawn last,
+	// on top of all the others.
+	for (i = (int) VEC_SIZE (bbox_linked) - 1; i >= 0; i--)
+	{
+		ed = bbox_linked[i];
+
+		// Compute anchor point
+		if (i == 0)
+		{
+			// With r_showfields < 0 the field overlay tracks the focused entity,
+			// so we disable the simple one (number + classname) to avoid overlap.
+			if (r_showfields.value < 0.f)
+				continue;
+			//SCR_GetEntityBottom (ed, anchor);
+			SCR_GetEntityCenter (ed, anchor);
+			SCR_ClipToFrustum (anchor, crosshair);
+		}
+		else
+		{
+			SCR_GetEntityCenter (ed, anchor);
+			SCR_ClipToFrustum (anchor, focus);
+		}
+		ProjectVector (anchor, r_matviewproj, proj);
+		SCR_ProjToCanvas (proj, &proj2canvas, &x, &y);
+
+		// Simple overlay: centered edict number and classname (if not empty)
+		VEC_CLEAR (scr_edictoverlaystrings);
+		MultiString_Append (&scr_edictoverlaystrings, "");
+		MultiString_Append (&scr_edictoverlaystrings, va ("edict %d", NUM_FOR_EDICT (ed)));
+		if (ed->v.classname)
+		{
+			MultiString_Append (&scr_edictoverlaystrings, "");
+			MultiString_Append (&scr_edictoverlaystrings, PR_GetString (ed->v.classname));
+		}
+
+		// Set background color based on link type
+		switch (ed->showbboxflags)
+		{
+		default:
+		case SHOWBBOX_LINK_NONE:		VectorSet (bgcolor, 0.f,	0.f,	0.f); break;
+		case SHOWBBOX_LINK_INCOMING:	VectorSet (bgcolor, 0.25f,	0.125f,	0.125f); break;
+		case SHOWBBOX_LINK_OUTGOING:	VectorSet (bgcolor, 0.125f,	0.125f,	0.25f); break;
+		case SHOWBBOX_LINK_BOTH:		VectorSet (bgcolor, 0.25f,	0.125f,	0.25f); break;
+		}
+
+		SCR_DrawKeyValueOverlay (x, y, scr_edictoverlaystrings, bgcolor);
+	}
+
+	// Show all relevant entity fields for the highlighted entity (first in bbox_linked)
+	if (r_showfields.value)
+	{
+		ed = bbox_linked[0];
+
+		// Compute anchor point
+		SCR_GetEntityBottom (ed, anchor);
+		ProjectVector (anchor, r_matviewproj, proj);
+		SCR_ProjToCanvas (proj, &proj2canvas, &x, &y);
+
+		// r_showfields > 0 locks the overlay to the bottom-right
+		if (r_showfields.value > 0.f)
+		{
+			x = glcanvas.right;
+			y = glcanvas.bottom;
+		}
+
+		// Build overlay text: first 2 lines are entity number and classname
+		VEC_CLEAR (scr_edictoverlaystrings);
+		MultiString_Append (&scr_edictoverlaystrings, "Edict");
+		MultiString_Append (&scr_edictoverlaystrings, va ("%d", NUM_FOR_EDICT (ed)));
+		COM_TintString ("classname", tinted, sizeof (tinted));
+		MultiString_Append (&scr_edictoverlaystrings, tinted);
+		MultiString_Append (&scr_edictoverlaystrings, PR_GetString (ed->v.classname));
+
+		// Add all relevant fields, excluding classname (already added to the header)
+		for (i = 1; i < qcvm->progs->numfielddefs; i++)
+		{
+			ddef_t *d = &qcvm->fielddefs[i];
+			if (d->ofs*4 == offsetof (entvars_t, classname) || !ED_IsRelevantField (ed, d))
+				continue;
+			COM_TintString (PR_GetString (d->s_name), tinted, sizeof (tinted));
+			MultiString_Append (&scr_edictoverlaystrings, tinted);
+			MultiString_Append (&scr_edictoverlaystrings, ED_FieldValueString (ed, d));
+		}
+
+		SCR_DrawKeyValueOverlay (x, y, scr_edictoverlaystrings, rgb_black);
+	}
+
+	PR_SwitchQCVM (NULL);
+}
 
 
 //=============================================================================
@@ -1702,6 +1999,7 @@ void SCR_UpdateScreen (void)
 		SCR_DrawClock (); //johnfitz
 		SCR_DrawDemoControls ();
 		SCR_DrawSpeed ();
+		SCR_DrawEdictInfo ();
 		SCR_DrawConsole ();
 		M_Draw ();
 		SCR_DrawFPS (); //johnfitz

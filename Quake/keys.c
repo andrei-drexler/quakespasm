@@ -478,6 +478,14 @@ void Key_Console (int key)
 		}
 		break;
 
+	case 'a':
+	case 'A':
+		if (keydown[K_CTRL]) {		/* Ctrl+A: select whole buffer */
+			Con_SelectAll();
+			return;
+		}
+		break;
+
 	case 'c':
 	case 'C':
 		if (keydown[K_CTRL]) {		/* Ctrl+C: abort the line -- S.A */

@@ -32,12 +32,14 @@ static char	loadname[32];	// for hunk tags
 static void Mod_LoadSpriteModel (qmodel_t *mod, void *buffer);
 static void Mod_LoadBrushModel (qmodel_t *mod, void *buffer);
 static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer);
+static void Mod_LoadMD5MeshModel (qmodel_t *mod, const char *buffer);
 static qmodel_t *Mod_LoadModel (qmodel_t *mod, qboolean crash);
 
 static void Mod_Print (void);
 
 static cvar_t	external_ents = {"external_ents", "1", CVAR_ARCHIVE};
 static cvar_t	external_vis = {"external_vis", "1", CVAR_ARCHIVE};
+cvar_t			r_md5 = {"r_md5", "1", CVAR_ARCHIVE};
 
 static byte	*mod_novis;
 static int	mod_novis_capacity;
@@ -54,6 +56,34 @@ texture_t	*r_notexture_mip2; //johnfitz -- used for non-lightmapped surfs with a
 
 /*
 ===============
+R_MD5_f -- called when r_md5 changes
+===============
+*/
+static void R_MD5_f (cvar_t *cvar)
+{
+	int			i;
+	qmodel_t	*mod;
+
+	//ericw -- free alias model VBOs
+	GLMesh_DeleteVertexBuffers ();
+
+	for (i=0 , mod=mod_known ; i<mod_numknown ; i++, mod++)
+	{
+		if (mod->type == mod_alias)
+		{
+			if (Cache_Check (&mod->cache))
+				Cache_Free (&mod->cache, true);
+			mod->needload = true;
+		}
+	}
+
+	for (i=0 , mod=mod_known ; i<mod_numknown ; i++, mod++)
+		if (mod->type == mod_alias)
+			Mod_LoadModel (mod, false);
+}
+
+/*
+===============
 Mod_Init
 ===============
 */
@@ -61,6 +91,8 @@ void Mod_Init (void)
 {
 	Cvar_RegisterVariable (&external_vis);
 	Cvar_RegisterVariable (&external_ents);
+	Cvar_RegisterVariable (&r_md5);
+	Cvar_SetCallback (&r_md5, R_MD5_f);
 
 	Cmd_AddCommand ("mcache", Mod_Print);
 
@@ -143,7 +175,7 @@ static byte *Mod_DecompressVis (byte *in, qmodel_t *model)
 	row = (model->numleafs+7)>>3;
 	if (mod_decompressed == NULL || row > mod_decompressed_capacity)
 	{
-		mod_decompressed_capacity = (row + 15) & ~15;
+		mod_decompressed_capacity = (row + VIS_ALIGN_MASK) & ~VIS_ALIGN_MASK;
 		mod_decompressed = (byte *) realloc (mod_decompressed, mod_decompressed_capacity);
 		if (!mod_decompressed)
 			Sys_Error ("Mod_DecompressVis: realloc() failed on %d bytes", mod_decompressed_capacity);
@@ -203,7 +235,7 @@ byte *Mod_NoVisPVS (qmodel_t *model)
 	int pvsbytes;
  
 	pvsbytes = (model->numleafs+7)>>3;
-	pvsbytes = (pvsbytes+3)&~3;
+	pvsbytes = (pvsbytes + VIS_ALIGN_MASK) & ~VIS_ALIGN_MASK; // round up
 	if (mod_novis == NULL || pvsbytes > mod_novis_capacity)
 	{
 		mod_novis_capacity = pvsbytes;
@@ -492,6 +524,7 @@ static void Mod_LoadTextures (lump_t *l)
 	int			mark, fwidth, fheight;
 	char		filename[MAX_OSPATH], mapname[MAX_OSPATH];
 	byte		*data;
+	enum srcformat fmt;
 //johnfitz
 
 	//johnfitz -- don't return early if no textures; still need to create dummy texture
@@ -589,11 +622,11 @@ static void Mod_LoadTextures (lump_t *l)
 				mark = Hunk_LowMark();
 				COM_StripExtension (loadmodel->name + 5, mapname, sizeof(mapname));
 				q_snprintf (filename, sizeof(filename), "textures/%s/#%s", mapname, tx->name+1); //this also replaces the '*' with a '#'
-				data = Image_LoadImage (filename, &fwidth, &fheight);
+				data = Image_LoadImage (filename, &fwidth, &fheight, &fmt);
 				if (!data)
 				{
 					q_snprintf (filename, sizeof(filename), "textures/#%s", tx->name+1);
-					data = Image_LoadImage (filename, &fwidth, &fheight);
+					data = Image_LoadImage (filename, &fwidth, &fheight, &fmt);
 				}
 
 				//now load whatever we found
@@ -601,7 +634,7 @@ static void Mod_LoadTextures (lump_t *l)
 				{
 					q_strlcpy (texturename, filename, sizeof(texturename));
 					tx->gltexture = TexMgr_LoadImage (loadmodel, texturename, fwidth, fheight,
-						SRC_RGBA, data, filename, 0, TEXPREF_MIPMAP | TEXPREF_BINDLESS);
+						fmt, data, filename, 0, TEXPREF_MIPMAP | TEXPREF_BINDLESS);
 				}
 				else //use the texture from the bsp file
 				{
@@ -621,11 +654,11 @@ static void Mod_LoadTextures (lump_t *l)
 				mark = Hunk_LowMark ();
 				COM_StripExtension (loadmodel->name + 5, mapname, sizeof(mapname));
 				q_snprintf (filename, sizeof(filename), "textures/%s/%s", mapname, tx->name);
-				data = Image_LoadImage (filename, &fwidth, &fheight);
+				data = Image_LoadImage (filename, &fwidth, &fheight, &fmt);
 				if (!data)
 				{
 					q_snprintf (filename, sizeof(filename), "textures/%s", tx->name);
-					data = Image_LoadImage (filename, &fwidth, &fheight);
+					data = Image_LoadImage (filename, &fwidth, &fheight, &fmt);
 				}
 
 				//now load whatever we found
@@ -633,21 +666,21 @@ static void Mod_LoadTextures (lump_t *l)
 				{
 					char filename2[MAX_OSPATH];
 					tx->gltexture = TexMgr_LoadImage (loadmodel, filename, fwidth, fheight,
-						SRC_RGBA, data, filename, 0, TEXPREF_MIPMAP | extraflags );
+						fmt, data, filename, 0, TEXPREF_MIPMAP | extraflags );
 
 					//now try to load glow/luma image from the same place
 					Hunk_FreeToLowMark (mark);
 					q_snprintf (filename2, sizeof(filename2), "%s_glow", filename);
-					data = Image_LoadImage (filename2, &fwidth, &fheight);
+					data = Image_LoadImage (filename2, &fwidth, &fheight, &fmt);
 					if (!data)
 					{
 						q_snprintf (filename2, sizeof(filename2), "%s_luma", filename);
-						data = Image_LoadImage (filename2, &fwidth, &fheight);
+						data = Image_LoadImage (filename2, &fwidth, &fheight, &fmt);
 					}
 
 					if (data)
 						tx->fullbright = TexMgr_LoadImage (loadmodel, filename2, fwidth, fheight,
-							SRC_RGBA, data, filename2, 0, TEXPREF_MIPMAP | extraflags );
+							fmt, data, filename2, 0, TEXPREF_MIPMAP | extraflags );
 				}
 				else //use the texture from the bsp file
 				{
@@ -826,7 +859,7 @@ static void Mod_LoadLighting (lump_t *l)
 					return;
 				}
 				Hunk_FreeToLowMark(mark);
-				Con_Printf("Outdated .lit file (%s should be %u bytes, not %u)\n", litfilename, 8+l->filelen*3, com_filesize);
+				Con_Printf("Outdated .lit file (%s should be %u bytes, not %lli)\n", litfilename, 8+l->filelen*3, com_filesize);
 			}
 			else
 			{
@@ -2549,8 +2582,9 @@ qboolean Mod_LoadMapDescription (char *desc, size_t maxchars, const char *map)
 				for (j = k = 0; com_token[j] && (size_t)k + 1 < maxchars; j++)
 				{
 					char c = com_token[j] & 0x7f;
-					// replace \n with a space
-					if (c == '\\' && com_token[j + 1] == 'n')
+					if (c == '\n' || c == '\r') // replace newlines with spaces
+						c = ' ';
+					else if (c == '\\' && com_token[j + 1] == 'n') // replace '\\' followed by 'n' with space
 					{
 						c = ' ';
 						j++;
@@ -2623,7 +2657,7 @@ static void *Mod_LoadAliasFrame (void * pin, maliasframedesc_t *frame)
 
 	pdaliasframe = (daliasframe_t *)pin;
 
-	strcpy (frame->name, pdaliasframe->name);
+	q_strlcpy (frame->name, pdaliasframe->name, sizeof (frame->name));
 	frame->firstpose = posenum;
 	frame->numposes = 1;
 
@@ -2919,25 +2953,64 @@ static void Mod_CalcAliasBounds (aliashdr_t *a)
 		radius = yawradius = 0;
 	}
 
-	//process verts
-	for (i=0 ; i<a->numposes; i++)
-		for (j=0; j<a->numverts; j++)
+	for (;;)
+	{
+		if (a->numposes && a->numverts)
 		{
-			for (k=0; k<3;k++)
-				v[k] = poseverts[i][j].v[k] * pheader->scale[k] + pheader->scale_origin[k];
-
-			for (k=0; k<3;k++)
+			switch(a->poseverttype)
 			{
-				loadmodel->mins[k] = q_min(loadmodel->mins[k], v[k]);
-				loadmodel->maxs[k] = q_max(loadmodel->maxs[k], v[k]);
+			case PV_QUAKE1:
+				//process verts
+				for (i=0 ; i<a->numposes; i++)
+					for (j=0; j<a->numverts; j++)
+					{
+						for (k=0; k<3;k++)
+							v[k] = poseverts[i][j].v[k] * pheader->scale[k] + pheader->scale_origin[k];
+
+						for (k=0; k<3;k++)
+						{
+							loadmodel->mins[k] = q_min(loadmodel->mins[k], v[k]);
+							loadmodel->maxs[k] = q_max(loadmodel->maxs[k], v[k]);
+						}
+						dist = v[0] * v[0] + v[1] * v[1];
+						if (yawradius < dist)
+							yawradius = dist;
+						dist += v[2] * v[2];
+						if (radius < dist)
+							radius = dist;
+					}
+				break;
+			case PV_IQM:
+				//process verts
+				for (i=0 ; i<a->numposes; i++)
+				{
+					const iqmvert_t *pv = (const iqmvert_t *)((byte*)a+a->vertexes) + i*a->numverts;
+					for (j=0; j<a->numverts; j++)
+					{
+						for (k=0; k<3;k++)
+							v[k] = pv[j].xyz[k];
+
+						for (k=0; k<3;k++)
+						{
+							loadmodel->mins[k] = q_min(loadmodel->mins[k], v[k]);
+							loadmodel->maxs[k] = q_max(loadmodel->maxs[k], v[k]);
+						}
+						dist = v[0] * v[0] + v[1] * v[1];
+						if (yawradius < dist)
+							yawradius = dist;
+						dist += v[2] * v[2];
+						if (radius < dist)
+							radius = dist;
+					}
+				}
+				break;
 			}
-			dist = v[0] * v[0] + v[1] * v[1];
-			if (yawradius < dist)
-				yawradius = dist;
-			dist += v[2] * v[2];
-			if (radius < dist)
-				radius = dist;
 		}
+
+		if (!a->nextsurface)
+			break;
+		a = (aliashdr_t*)((byte*)a + a->nextsurface);
+	}
 
 	//rbounds will be used when entity has nonzero pitch or roll
 	radius = sqrt(radius);
@@ -3022,6 +3095,8 @@ Mod_LoadAliasModel
 */
 static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 {
+	char				path[MAX_QPATH];
+	unsigned int		md5_path_id;
 	int					i, j;
 	mdl_t				*pinmodel;
 	stvert_t			*pinstverts;
@@ -3031,6 +3106,23 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	daliasframetype_t	*pframetype;
 	daliasskintype_t	*pskintype;
 	int					start, end, total;
+
+	if (r_md5.value)
+	{
+		COM_StripExtension (mod->name, path, sizeof (path));
+		COM_AddExtension (path, ".md5mesh", sizeof (path));
+
+		if (COM_FileExists (path, &md5_path_id) && md5_path_id >= mod->path_id)
+		{
+			char *md5buffer = (char *) COM_LoadMallocFile (path, NULL);
+			if (md5buffer)
+			{
+				Mod_LoadMD5MeshModel (mod, md5buffer);
+				free (md5buffer);
+				return;
+			}
+		}
+	}
 
 	start = Hunk_LowMark ();
 
@@ -3147,6 +3239,7 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	}
 
 	pheader->numposes = posenum;
+	pheader->poseverttype = PV_QUAKE1;
 
 	mod->type = mod_alias;
 
@@ -3379,3 +3472,779 @@ static void Mod_Print (void)
 	Con_Printf ("%i models\n",mod_numknown); //johnfitz -- print the total too
 }
 
+/*
+=================================================================
+MD5 Models, for compat with the rerelease and NOT doom3.
+=================================================================
+md5mesh:
+MD5Version 10
+commandline ""
+numJoints N
+numMeshes N
+joints {
+"name" ParentIdx ( Pos_X Y Z ) ( Quat_X Y Z )
+}
+mesh {
+shader "name"	//file-relative path, with _%02d_%02d postfixed for skin/framegroup support. unlike doom3.
+numverts N
+vert # ( S T ) FirstWeight count
+numtris N
+tri # A B C
+numweights N
+weight # BoneIdx Scale ( X Y Z )
+}
+
+md5anim:
+MD5Version 10
+commandline ""
+numFrames N
+numJoints N
+frameRate FPS
+numAnimatedComponents N	//bones*6ish
+hierachy {
+"name" ParentIdx Flags DataStart
+}
+bounds {
+( X Y Z ) ( X Y Z )
+}
+baseframe {
+( pos_X Y Z ) ( quad_X Y Z )
+}
+frame # {
+RAW ...
+}
+
+We'll unpack the animation to separate framegroups (one-pose per, for consistency with most q1 models).
+*/
+
+static qboolean MD5_ParseCheck(const char *s, const char **buffer)
+{
+	if (strcmp(com_token, s))
+		return false;
+	*buffer = COM_Parse(*buffer);
+	return true;
+}
+static size_t MD5_ParseUInt(const char **buffer)
+{
+	size_t i = SDL_strtoull(com_token, NULL, 0);
+	*buffer = COM_Parse(*buffer);
+	return i;
+}
+static long MD5_ParseSInt(const char **buffer)
+{
+	long i = SDL_strtol(com_token, NULL, 0);
+	*buffer = COM_Parse(*buffer);
+	return i;
+}
+static double MD5_ParseFloat(const char **buffer)
+{
+	double i = SDL_strtod(com_token, NULL);
+	*buffer = COM_Parse(*buffer);
+	return i;
+}
+#define MD5EXPECT(s) do{if (strcmp(com_token, s)) Sys_Error ("Mod_LoadMD5MeshModel(%s): Expected \"%s\"", fname, s); buffer = COM_Parse(buffer); }while(0)
+#define MD5UINT() MD5_ParseUInt(&buffer)
+#define MD5SINT() MD5_ParseSInt(&buffer)
+#define MD5FLOAT() MD5_ParseFloat(&buffer)
+#define MD5CHECK(s) MD5_ParseCheck(s, &buffer)
+
+typedef struct
+{
+	size_t firstweight;
+	unsigned int count;
+} md5vertinfo_t;
+typedef struct
+{
+	size_t bone;
+	vec4_t pos;
+} md5weightinfo_t;
+
+static void GenMatrixPosQuat4Scale(const vec3_t pos, const vec4_t quat, const vec3_t scale, float result[12])
+{
+	float xx, xy, xz, xw, yy, yz, yw, zz, zw;
+	float x2, y2, z2;
+	float s;
+	x2 = quat[0] + quat[0];
+	y2 = quat[1] + quat[1];
+	z2 = quat[2] + quat[2];
+
+	xx = quat[0] * x2;   xy = quat[0] * y2;   xz = quat[0] * z2;
+	yy = quat[1] * y2;   yz = quat[1] * z2;   zz = quat[2] * z2;
+	xw = quat[3] * x2;   yw = quat[3] * y2;   zw = quat[3] * z2;
+
+	s = scale[0];
+	result[0*4+0] = s*(1.0f - (yy + zz));
+	result[1*4+0] = s*(xy + zw);
+	result[2*4+0] = s*(xz - yw);
+
+	s = scale[1];
+	result[0*4+1] = s*(xy - zw);
+	result[1*4+1] = s*(1.0f - (xx + zz));
+	result[2*4+1] = s*(yz + xw);
+
+	s = scale[2];
+	result[0*4+2] = s*(xz + yw);
+	result[1*4+2] = s*(yz - xw);
+	result[2*4+2] = s*(1.0f - (xx + yy));
+
+	result[0*4+3]  =     pos[0];
+	result[1*4+3]  =     pos[1];
+	result[2*4+3]  =     pos[2];
+}
+
+static void Matrix3x4_Invert_Simple (const float *in1, float *out)
+{
+	// we only support uniform scaling, so assume the first row is enough
+	// (note the lack of sqrt here, because we're trying to undo the scaling,
+	// this means multiplying by the inverse scale twice - squaring it, which
+	// makes the sqrt a waste of time)
+#if 1
+	double scale = 1.0 / (in1[0] * in1[0] + in1[1] * in1[1] + in1[2] * in1[2]);
+#else
+	double scale = 3.0 / sqrt
+	(in1->m[0][0] * in1->m[0][0] + in1->m[0][1] * in1->m[0][1] + in1->m[0][2] * in1->m[0][2]
+		+ in1->m[1][0] * in1->m[1][0] + in1->m[1][1] * in1->m[1][1] + in1->m[1][2] * in1->m[1][2]
+		+ in1->m[2][0] * in1->m[2][0] + in1->m[2][1] * in1->m[2][1] + in1->m[2][2] * in1->m[2][2]);
+	scale *= scale;
+#endif
+
+	// invert the rotation by transposing and multiplying by the squared
+	// recipricol of the input matrix scale as described above
+	out[0] = in1[0] * scale;
+	out[1] = in1[4] * scale;
+	out[2] = in1[8] * scale;
+	out[4] = in1[1] * scale;
+	out[5] = in1[5] * scale;
+	out[6] = in1[9] * scale;
+	out[8] = in1[2] * scale;
+	out[9] = in1[6] * scale;
+	out[10] = in1[10] * scale;
+
+	// invert the translate
+	out[3] = -(in1[3] * out[0] + in1[7] * out[1] + in1[11] * out[2]);
+	out[7] = -(in1[3] * out[4] + in1[7] * out[5] + in1[11] * out[6]);
+	out[11] = -(in1[3] * out[8] + in1[7] * out[9] + in1[11] * out[10]);
+}
+
+static void Matrix3x4_RM_Transform4(const float *matrix, const float *vector, float *product)
+{
+	product[0] = matrix[0]*vector[0] + matrix[1]*vector[1] + matrix[2]*vector[2] + matrix[3]*vector[3];
+	product[1] = matrix[4]*vector[0] + matrix[5]*vector[1] + matrix[6]*vector[2] + matrix[7]*vector[3];
+	product[2] = matrix[8]*vector[0] + matrix[9]*vector[1] + matrix[10]*vector[2] + matrix[11]*vector[3];
+}
+static void MD5_BakeInfluences(const char *fname, bonepose_t *outposes, iqmvert_t *vert, md5vertinfo_t *vinfo, md5weightinfo_t *weight, size_t numverts, size_t numweights)
+{
+	size_t v, i, lowidx, k;
+	md5weightinfo_t *w;
+	vec3_t pos;
+	float lowval, scale;
+	unsigned int maxinfluences = 0;
+	float scaleimprecision = 1;
+	for (v = 0; v < numverts; v++, vert++, vinfo++)
+	{
+		// unquantized weights
+		float weights[countof (vert->weight)];
+		memset (weights, 0, sizeof (weights));
+
+		//st were already loaded
+		//norm will need to be calculated after we have xyz info
+		vert->xyz[0] = vert->xyz[1] = vert->xyz[2] = 0;
+		vert->idx[0] = vert->idx[1] = vert->idx[2] = vert->idx[3] = 0;
+
+		if (vinfo->firstweight + vinfo->count > numweights)
+			Sys_Error ("%s: weight index out of bounds", fname);
+		if (maxinfluences < vinfo->count)
+			maxinfluences = vinfo->count;
+		w = weight + vinfo->firstweight;
+		for (i = 0; i < vinfo->count; i++, w++)
+		{
+			Matrix3x4_RM_Transform4(outposes[w->bone].mat, w->pos, pos);
+			VectorAdd(vert->xyz, pos, vert->xyz);
+
+			if (i < countof(weights))
+			{
+				weights[i] = w->pos[3];
+				vert->idx[i] = w->bone;
+			}
+			else
+			{
+				//obnoxious code to find the lowest of the current possible bone indexes.
+				lowval = weights[0];
+				lowidx = 0;
+				for (k = 1; k < countof(weights); k++)
+					if (weights[k] < lowval)
+					{
+						lowval = weights[k];
+						lowidx = k;
+					}
+				if (weights[lowidx] < w->pos[3])
+				{	//found a lower/unset weight, replace it.
+					weights[lowidx] = w->pos[3];
+					vert->idx[lowidx] = w->bone;
+				}
+			}
+		}
+
+		//normalize in case we dropped some weights.
+		scale = weights[0] + weights[1] + weights[2] + weights[3];
+		if (scale>0)
+		{
+			if (scaleimprecision < scale)
+				scaleimprecision = scale;
+			scale = 255.f/scale;
+			for (k = 0; k < countof(vert->weight); k++)
+				vert->weight[k] = (int) (weights[k] * scale);
+		}
+		else	//something bad...
+			vert->weight[0] = 255, vert->weight[1] = vert->weight[2] = vert->weight[3] = 0;
+	}
+	if (maxinfluences > countof(vert->weight))
+		Con_DWarning("%s uses up to %u influences per vertex (weakest: %g)\n", fname, maxinfluences, scaleimprecision);
+}
+
+static uint32_t HashVert (const vec3_t v)
+{
+	return COM_HashBlock (&v[0], 3 * sizeof (float));
+}
+
+static void MD5_ComputeNormals(iqmvert_t *vert, size_t numverts, unsigned short *indexes, size_t numindexes)
+{
+	size_t			v, t, hashsize;
+	int				*hashmap;
+	vec3_t			*normals;
+	unsigned short	*weld;
+
+	hashsize = numverts * 2;
+	hashmap = (int *) calloc (hashsize, sizeof (*hashmap));
+	weld = (unsigned short *) malloc (numverts * sizeof (*weld));
+	normals = (vec3_t *) calloc (numverts, sizeof (vec3_t));
+
+	for (v = 0; v < numverts; v++)
+	{
+		uint32_t pos = HashVert (vert[v].xyz) % hashsize;
+		uint32_t end = pos;
+
+		do
+		{
+			if (!hashmap[pos])
+			{
+				hashmap[pos] = v + 1;
+				weld[v] = v;
+				break;
+			}
+
+			t = hashmap[pos] - 1;
+			if (VectorCompare (vert[t].xyz, vert[v].xyz))
+			{
+				weld[v] = weld[t];
+				break;
+			}
+
+			++pos;
+			if (pos == hashsize)
+				pos = 0;
+		}
+		while (pos != end);
+	}
+
+	for (t = 0; t < numindexes; t += 3)
+	{
+		vec3_t d1, d2, norm;
+		int i0 = weld[indexes[t+0]];
+		int i1 = weld[indexes[t+1]];
+		int i2 = weld[indexes[t+2]];
+		iqmvert_t *v0 = &vert[i0];
+		iqmvert_t *v1 = &vert[i1];
+		iqmvert_t *v2 = &vert[i2];
+
+		VectorSubtract(v1->xyz, v0->xyz, d1);
+		VectorSubtract(v2->xyz, v0->xyz, d2);
+		CrossProduct(d2, d1, norm);
+
+		VectorAdd(normals[i0], norm, normals[i0]);
+		VectorAdd(normals[i1], norm, normals[i1]);
+		VectorAdd(normals[i2], norm, normals[i2]);
+	}
+
+	for (v = 0; v < numverts; v++)
+	{
+		if (v == weld[v])
+		{
+			VectorNormalize(normals[v]);
+			vert[v].norm[0] = (int) (normals[v][0] * 127.f);
+			vert[v].norm[1] = (int) (normals[v][1] * 127.f);
+			vert[v].norm[2] = (int) (normals[v][2] * 127.f);
+			vert[v].norm[3] = 0;
+		}
+		else
+		{
+			vert[v].norm[0] = vert[weld[v]].norm[0];
+			vert[v].norm[1] = vert[weld[v]].norm[1];
+			vert[v].norm[2] = vert[weld[v]].norm[2];
+			vert[v].norm[3] = vert[weld[v]].norm[3];
+		}
+	}
+
+	free (normals);
+	free (weld);
+	free (hashmap);
+}
+
+static unsigned int MD5_HackyModelFlags(const char *name)
+{
+	unsigned int ret = 0;
+	char oldmodel[MAX_QPATH];
+	mdl_t *f;
+	COM_StripExtension(name, oldmodel, sizeof(oldmodel));
+	COM_AddExtension(oldmodel, ".mdl", sizeof(oldmodel));
+
+	f = (mdl_t*)COM_LoadMallocFile(oldmodel, NULL);
+	if (f)
+	{
+		if (com_filesize >= sizeof(*f) && LittleLong(f->ident) == IDPOLYHEADER && LittleLong(f->version) == ALIAS_VERSION)
+			ret = f->flags;
+		free(f);
+	}
+	return ret;
+}
+
+typedef struct
+{
+	char *animfile;
+	const char *buffer;
+	char fname[MAX_QPATH];
+	size_t numposes;
+	size_t numjoints;
+	bonepose_t *posedata;
+} md5animctx_t;
+//This is split into two because aliashdr_t has silly trailing framegroup info.
+static void MD5Anim_Begin(md5animctx_t *ctx, const char *fname)
+{
+	//Load an md5anim into it, if we can.
+	COM_StripExtension(fname, ctx->fname, sizeof(ctx->fname));
+	COM_AddExtension(ctx->fname, ".md5anim", sizeof(ctx->fname));
+	fname = ctx->fname;
+	ctx->animfile = (char *) COM_LoadMallocFile(fname, NULL);
+	ctx->numposes = 0;
+
+	if (ctx->animfile)
+	{
+		const char *buffer = COM_Parse(ctx->animfile);
+		MD5EXPECT("MD5Version");
+		MD5EXPECT("10");
+		if (MD5CHECK("commandline"))	buffer = COM_Parse(buffer);
+		MD5EXPECT("numFrames");	ctx->numposes = MD5UINT();
+		MD5EXPECT("numJoints");	ctx->numjoints = MD5UINT();
+		MD5EXPECT("frameRate"); /*irrelevant here*/
+
+		if (ctx->numposes <= 0)
+			Sys_Error ("%s has no poses", fname);
+
+		ctx->buffer = buffer;
+	}
+}
+static void MD5Anim_Load(md5animctx_t *ctx, boneinfo_t *bones, size_t numbones)
+{
+	typedef struct { unsigned int flags, offset;} md5animbase_t;
+	const char *fname = ctx->fname;
+	md5animbase_t *ab;
+	size_t rawcount;
+	float *raw, *r;
+	bonepose_t *outposes, *frameposes;
+	const char *buffer = COM_Parse(ctx->buffer);
+	size_t j;
+
+	if (!buffer)
+	{
+		free(ctx->animfile);
+		return;
+	}
+
+	MD5EXPECT("numAnimatedComponents");	rawcount = MD5UINT();
+
+	if (ctx->numjoints != numbones)
+		Sys_Error ("%s has incorrect bone count", fname);
+
+	raw = (float *) Z_Malloc(sizeof(*raw)*(rawcount+6));
+	ab = (md5animbase_t *) Z_Malloc(sizeof(*ab)*ctx->numjoints);
+
+	ctx->posedata = outposes = (bonepose_t *) Hunk_Alloc(sizeof(*outposes)*ctx->numjoints*ctx->numposes);
+	frameposes = (bonepose_t *) malloc (sizeof (*frameposes) * ctx->numjoints);
+
+
+	MD5EXPECT("hierarchy");
+	MD5EXPECT("{");
+	for (j = 0; j < ctx->numjoints; j++)
+	{
+		//validate stuff
+		if (strcmp(bones[j].name, com_token))
+			Sys_Error ("%s: bone was renamed", fname);
+		buffer = COM_Parse(buffer);
+		if (bones[j].parent != MD5SINT())
+			Sys_Error ("%s: bone has wrong parent", fname);
+		//new info
+		ab[j].flags = MD5UINT();
+		if (ab[j].flags & ~63)
+			Sys_Error ("%s: bone has unsupported flags", fname);
+		ab[j].offset = MD5UINT();
+		if (ab[j].offset > rawcount+6)
+			Sys_Error ("%s: bone has bad offset", fname);
+	}
+	MD5EXPECT("}");
+	MD5EXPECT("bounds");
+	MD5EXPECT("{");
+	while(MD5CHECK("("))
+	{
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		MD5EXPECT(")");
+
+		MD5EXPECT("(");
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		MD5EXPECT(")");
+	}
+	MD5EXPECT("}");
+
+	MD5EXPECT("baseframe");
+	MD5EXPECT("{");
+	while(MD5CHECK("("))
+	{
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		MD5EXPECT(")");
+
+		MD5EXPECT("(");
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		(void)MD5FLOAT();
+		MD5EXPECT(")");
+	}
+	MD5EXPECT("}");
+
+	while(MD5CHECK("frame"))
+	{
+		size_t idx = MD5UINT();
+		if (idx >= ctx->numposes)
+			Sys_Error ("%s: invalid pose index", fname);
+		MD5EXPECT("{");
+		for (j = 0; j < rawcount; j++)
+			raw[j] = MD5FLOAT();
+		MD5EXPECT("}");
+
+		//okay, we have our raw info, unpack the actual bone info.
+		for (j = 0; j < ctx->numjoints; j++)
+		{
+			bonepose_t local;
+			vec3_t pos = {0,0,0};
+			static vec3_t scale = {1,1,1};
+			vec4_t quat = {0,0,0};
+			r = raw + ab[j].offset;
+			if (ab[j].flags & 1)	pos[0] = *r++;
+			if (ab[j].flags & 2)	pos[1] = *r++;
+			if (ab[j].flags & 4)	pos[2] = *r++;
+
+			if (ab[j].flags & 8)	quat[0] = *r++;
+			if (ab[j].flags & 16)	quat[1] = *r++;
+			if (ab[j].flags & 32)	quat[2] = *r++;
+
+			quat[3] = 1 - DotProduct(quat,quat);
+			if (quat[3] < 0)
+				quat[3] = 0;//we have no imagination.
+			quat[3] = -sqrt(quat[3]);
+
+			GenMatrixPosQuat4Scale(pos, quat, scale, local.mat);
+
+			if (bones[j].parent < 0)
+				frameposes[j] = local;
+			else
+				R_ConcatTransforms ((void *) frameposes[bones[j].parent].mat, (void *) local.mat, (void *) frameposes[j].mat);
+		}
+
+		for (j = 0; j < ctx->numjoints; j++)
+			R_ConcatTransforms ((void *) frameposes[j].mat, (void *) bones[j].inverse.mat, (void *) outposes[idx*ctx->numjoints + j].mat);
+	}
+
+	Z_Free(raw);
+	Z_Free(ab);
+	free(frameposes);
+	free(ctx->animfile);
+}
+static void Mod_LoadMD5MeshModel (qmodel_t *mod, const char *buffer)
+{
+	const char			*fname = mod->name;
+	unsigned short		*poutindexes;
+	iqmvert_t			*poutvert;
+	int					start, end, total;
+	aliashdr_t			*outhdr, *surf;
+	size_t				hdrsize;
+
+	bonepose_t			*outposes;
+	boneinfo_t			*outbones;
+
+	size_t				numjoints, j;
+	size_t				nummeshes, m;
+	char				texname[MAX_QPATH];
+	md5vertinfo_t		*vinfo;
+	md5weightinfo_t		*weight;
+	size_t				numweights;
+
+	md5animctx_t		anim = {NULL};
+
+	start = Hunk_LowMark ();
+
+	buffer = COM_Parse(buffer);
+
+	MD5EXPECT("MD5Version");
+	MD5EXPECT("10");
+	if (MD5CHECK("commandline"))	buffer = COM_Parse(buffer);
+	MD5EXPECT("numJoints");	numjoints = MD5UINT();
+	MD5EXPECT("numMeshes");	nummeshes = MD5UINT();
+
+	if (numjoints <= 0)
+		Sys_Error ("%s has no bones", mod->name);
+	if (nummeshes <= 0)
+		Sys_Error ("%s has no meshes", mod->name);
+
+	if (strcmp(com_token, "joints")) Sys_Error ("Mod_LoadMD5MeshModel(%s): Expected \"%s\"", fname, "joints");
+	MD5Anim_Begin(&anim, fname);
+	buffer = COM_Parse(buffer);
+
+	hdrsize = sizeof(*outhdr) - sizeof(outhdr->frames);
+	hdrsize += sizeof(outhdr->frames)*anim.numposes;
+	outhdr = (aliashdr_t *) Hunk_Alloc(hdrsize*numjoints);
+	outbones = (boneinfo_t *) Hunk_Alloc(sizeof(*outbones)*numjoints);
+	outposes = (bonepose_t *) Z_Malloc(sizeof(*outposes)*numjoints);
+
+	MD5EXPECT("{");
+	for (j = 0; j < numjoints; j++)
+	{
+		vec3_t pos;
+		static vec3_t scale = {1,1,1};
+		vec4_t quat;
+		q_strlcpy(outbones[j].name, com_token, sizeof(outbones[j].name));	buffer = COM_Parse(buffer);
+		outbones[j].parent = MD5SINT();
+		if (outbones[j].parent < -1 && outbones[j].parent >= (int)numjoints)
+			Sys_Error ("bone index out of bounds");
+		MD5EXPECT("(");
+		pos[0] = MD5FLOAT();
+		pos[1] = MD5FLOAT();
+		pos[2] = MD5FLOAT();
+		MD5EXPECT(")");
+		MD5EXPECT("(");
+		quat[0] = MD5FLOAT();
+		quat[1] = MD5FLOAT();
+		quat[2] = MD5FLOAT();
+		quat[3] = 1 - DotProduct(quat,quat);
+		if (quat[3] < 0)
+			quat[3] = 0;//we have no imagination.
+		quat[3] = -sqrt(quat[3]);
+		MD5EXPECT(")");
+
+		GenMatrixPosQuat4Scale(pos, quat, scale, outposes[j].mat);
+		Matrix3x4_Invert_Simple(outposes[j].mat, outbones[j].inverse.mat);	//absolute, so we can just invert now.
+	}
+
+	if (strcmp(com_token, "}")) Sys_Error ("Mod_LoadMD5MeshModel(%s): Expected \"%s\"", fname, "}");
+	MD5Anim_Load(&anim, outbones, numjoints);
+	buffer = COM_Parse(buffer);
+
+	for (m = 0; m < nummeshes; m++)
+	{
+		MD5EXPECT("mesh");
+		MD5EXPECT("{");
+
+		surf = (aliashdr_t*)((byte*)outhdr + m*hdrsize);
+		if (m+1 < nummeshes)
+			surf->nextsurface = hdrsize;
+		else
+			surf->nextsurface = 0;
+
+		surf->poseverttype = PV_IQM;
+		for (j = 0; j < 3; j++)
+		{
+			surf->scale_origin[j] = 0;
+			surf->scale[j] = 1.0;
+		}
+
+		surf->numbones = numjoints;
+		surf->boneinfo = (byte*)outbones-(byte*)surf;
+
+		if (anim.numposes)
+		{
+			surf->boneposedata = (byte*)anim.posedata-(byte*)surf;
+			surf->numboneposes = anim.numposes;
+
+			for (j = 0; j < anim.numposes; j++)
+			{
+				surf->frames[j].firstpose = j;
+				surf->frames[j].numposes = 1;
+				surf->frames[j].interval = 0.1;
+			}
+			surf->numframes = j;
+		}
+
+		MD5EXPECT("shader");
+		//MD5 violation: the skin is a single material. adding prefixes/postfixes here is the wrong thing to do.
+		//but we do so anyway, because rerelease compat.
+		for (surf->numskins = 0; surf->numskins < MAX_SKINS; surf->numskins++)
+		{
+			unsigned int fwidth, fheight, f;
+			enum srcformat fmt = SRC_RGBA;
+			void *data;
+			int mark = Hunk_LowMark ();
+			for (f = 0; f < countof(surf->gltextures[0]); f++)
+			{
+				q_snprintf(texname, sizeof(texname), "progs/%s_%02u_%02u", com_token, surf->numskins, f);
+
+				data = Image_LoadImage (texname, (int*)&fwidth, (int*)&fheight, &fmt);
+				//now load whatever we found
+				if (data) //load external image
+				{
+					surf->gltextures[surf->numskins][f] = TexMgr_LoadImage (mod, texname, fwidth, fheight, fmt, data, texname, 0, TEXPREF_ALPHA|TEXPREF_NOBRIGHT|TEXPREF_MIPMAP );
+					surf->fbtextures[surf->numskins][f] = NULL;
+					if (fmt == SRC_INDEXED)
+					{	//8bit base texture. use it for fullbrights.
+						if (Mod_CheckFullbrights (data, fwidth*fheight))
+							surf->fbtextures[surf->numskins][f] = TexMgr_LoadImage (mod, va("%s_luma", texname), fwidth, fheight, fmt, data, texname, 0, TEXPREF_ALPHA|TEXPREF_FULLBRIGHT|TEXPREF_MIPMAP );
+					}
+					else
+					{	//we found a 32bit base texture.
+						if (!surf->fbtextures[surf->numskins][f])
+						{
+							q_snprintf(texname, sizeof(texname), "progs/%s_%02u_%02u_glow", com_token, surf->numskins, f);
+							surf->fbtextures[surf->numskins][f] = TexMgr_LoadImage(mod, texname, surf->skinwidth, surf->skinheight, SRC_RGBA, NULL, texname, 0, TEXPREF_MIPMAP);
+						}
+						if (!surf->fbtextures[surf->numskins][f])
+						{
+							q_snprintf(texname, sizeof(texname), "progs/%s_%02u_%02u_luma", com_token, surf->numskins, f);
+							surf->fbtextures[surf->numskins][f] = TexMgr_LoadImage(mod, texname, surf->skinwidth, surf->skinheight, SRC_RGBA, NULL, texname, 0, TEXPREF_MIPMAP);
+						}
+					}
+
+					//now try to load glow/luma image from the same place
+					Hunk_FreeToLowMark (mark);
+				}
+				else
+					break;
+			}
+			if (f == 0)
+				break;	//no images loaded...
+
+			//this stuff is hideous.
+			if (f < 2)
+			{
+				surf->gltextures[surf->numskins][1] = surf->gltextures[surf->numskins][0];
+				surf->fbtextures[surf->numskins][1] = surf->fbtextures[surf->numskins][0];
+			}
+			if (f == 3)
+				Con_Warning("progs/%s_%02u_##: 3 skinframes found...\n", com_token, surf->numskins);
+			if (f < 4)
+			{
+				surf->gltextures[surf->numskins][3] = surf->gltextures[surf->numskins][1];
+				surf->gltextures[surf->numskins][2] = surf->gltextures[surf->numskins][0];
+
+				surf->fbtextures[surf->numskins][3] = surf->fbtextures[surf->numskins][1];
+				surf->fbtextures[surf->numskins][2] = surf->fbtextures[surf->numskins][0];
+			}
+		}
+		surf->skinwidth = surf->gltextures[0][0]?surf->gltextures[0][0]->width:1;
+		surf->skinheight = surf->gltextures[0][0]?surf->gltextures[0][0]->height:1;
+		buffer = COM_Parse(buffer);
+		MD5EXPECT("numverts");
+		surf->numverts_vbo = surf->numverts = MD5UINT();
+
+		vinfo = (md5vertinfo_t *) Z_Malloc(sizeof(*vinfo)*surf->numverts);
+		poutvert = (iqmvert_t *) Hunk_Alloc(sizeof(*poutvert)*surf->numverts);
+		surf->vertexes = (byte*)poutvert-(byte*)surf;
+		surf->numposes = 1;
+		while (MD5CHECK("vert"))
+		{
+			size_t idx = MD5UINT();
+			if (idx >= (size_t)surf->numverts)
+				Sys_Error ("vertex index out of bounds");
+			MD5EXPECT("(");
+			poutvert[idx].st[0] = MD5FLOAT();
+			poutvert[idx].st[1] = MD5FLOAT();
+			MD5EXPECT(")");
+			vinfo[idx].firstweight = MD5UINT();
+			vinfo[idx].count = MD5UINT();
+		}
+		MD5EXPECT("numtris");
+		surf->numtris = MD5UINT();
+		surf->numindexes = surf->numtris*3;
+		poutindexes = (unsigned short *) Hunk_Alloc(sizeof(*poutindexes)*surf->numindexes);
+		surf->indexes = (byte*)poutindexes-(byte*)surf;
+		while (MD5CHECK("tri"))
+		{
+			size_t idx = MD5UINT();
+			if (idx >= (size_t)surf->numtris)
+				Sys_Error ("triangle index out of bounds");
+			idx *= 3;
+			for (j = 0; j < 3; j++)
+			{
+				size_t t = MD5UINT();
+				if (t >= (size_t)surf->numverts)
+					Sys_Error ("vertex index out of bounds");
+				poutindexes[idx+j] = t;
+			}
+		}
+
+		//md5 is a gpu-unfriendly interchange format. :(
+		MD5EXPECT("numweights");
+		numweights = MD5UINT();
+		weight = (md5weightinfo_t *) Z_Malloc(sizeof(*weight)*numweights);
+		while (MD5CHECK("weight"))
+		{
+			size_t idx = MD5UINT();
+			if (idx >= numweights)
+				Sys_Error ("weight index out of bounds");
+
+			weight[idx].bone = MD5UINT();
+			if (weight[idx].bone >= numjoints)
+				Sys_Error ("bone index out of bounds");
+			weight[idx].pos[3] = MD5FLOAT();
+			MD5EXPECT("(");
+			weight[idx].pos[0] = MD5FLOAT()*weight[idx].pos[3];
+			weight[idx].pos[1] = MD5FLOAT()*weight[idx].pos[3];
+			weight[idx].pos[2] = MD5FLOAT()*weight[idx].pos[3];
+			MD5EXPECT(")");
+		}
+		//so make it gpu-friendly.
+		MD5_BakeInfluences(fname, outposes, poutvert, vinfo, weight, surf->numverts, numweights);
+		//and now make up the normals that the format lacks. we'll still probably have issues from seams, but then so did qme, so at least its faithful... :P
+		MD5_ComputeNormals(poutvert, surf->numverts, poutindexes, surf->numindexes);
+
+		Z_Free(weight);
+		Z_Free(vinfo);
+
+		MD5EXPECT("}");
+	}
+	Z_Free(outposes);
+
+	GLMesh_LoadVertexBuffer (mod, outhdr);
+
+	//the md5 format does not have its own modelflags, yet we still need to know about trails and rotating etc
+	mod->flags = MD5_HackyModelFlags(mod->name);
+
+	mod->synctype = ST_FRAMETIME;	//keep IQM animations synced to when .frame is changed. framegroups are otherwise not very useful.
+	mod->type = mod_alias;
+
+	Mod_CalcAliasBounds (outhdr); //johnfitz
+
+	//
+	// move the complete, relocatable alias model to the cache
+	//
+	end = Hunk_LowMark ();
+	total = end - start;
+
+	Cache_Alloc (&mod->cache, total, loadname);
+	if (!mod->cache.data)
+		return;
+	memcpy (mod->cache.data, outhdr, total);
+
+	Hunk_FreeToLowMark (start);
+}

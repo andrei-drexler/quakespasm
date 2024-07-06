@@ -9,7 +9,7 @@ jobs:
       matrix:
         compiler: ["clang", "gcc"]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Dependencies
       run: sudo apt update && sudo apt install libcurl4-openssl-dev libmad0-dev libsdl2-dev libvorbis-dev
     - name: Build

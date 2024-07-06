@@ -43,7 +43,7 @@ static int		*demo_head_sizes;
 // Demo rewinding
 typedef struct
 {
-	long			fileofs;
+	qfileofs_t		fileofs;
 	unsigned short	datasize;
 	byte			intermission;
 	byte			forceunderwater;
@@ -257,7 +257,7 @@ static qboolean CL_NextDemoFrame (void)
 			demoframe_t newframe;
 
 			memset (&newframe, 0, sizeof (newframe));
-			newframe.fileofs = ftell (cls.demofile);
+			newframe.fileofs = Sys_ftell (cls.demofile);
 			newframe.intermission = cl.intermission;
 			newframe.forceunderwater = cl.forceunderwater;
 			VEC_PUSH (demo_rewind.frames, newframe);
@@ -276,7 +276,7 @@ static qboolean CL_NextDemoFrame (void)
 		return false;
 
 	lastframe = &demo_rewind.frames[framecount - 1];
-	fseek (cls.demofile, lastframe->fileofs, SEEK_SET);
+	Sys_fseek (cls.demofile, lastframe->fileofs, SEEK_SET);
 
 	if (framecount == 1)
 		demo_rewind.backstop = true;
@@ -810,7 +810,7 @@ void CL_PlayDemo_f (void)
 	q_strlcpy (cls.demofilename, name, sizeof (cls.demofilename));
 	cls.state = ca_connected;
 	cls.demoloop = Cmd_Argc () >= 3 ? Q_atoi (Cmd_Argv (2)) != 0 : false;
-	cls.demofilestart = ftell (cls.demofile);
+	cls.demofilestart = Sys_ftell (cls.demofile);
 	cls.demofilesize = com_filesize;
 
 // get rid of the menu and/or console

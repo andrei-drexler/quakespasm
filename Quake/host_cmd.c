@@ -76,7 +76,7 @@ static filelist_item_t *FileList_AddWithData (const char *name, const void *data
 			return item;
 	}
 
-	item = (filelist_item_t *) Z_Malloc(sizeof(filelist_item_t) + datasize);
+	item = (filelist_item_t *) malloc (sizeof(filelist_item_t) + datasize);
 	q_strlcpy (item->name, name, sizeof(item->name));
 	if (datasize)
 	{
@@ -131,7 +131,7 @@ static void FileList_Clear (filelist_item_t **list)
 	while (*list)
 	{
 		blah = (*list)->next;
-		Z_Free(*list);
+		free (*list);
 		*list = blah;
 	}
 }

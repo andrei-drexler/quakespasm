@@ -55,6 +55,7 @@ extern cvar_t r_softemu;
 extern cvar_t r_waterwarp;
 extern cvar_t r_oit;
 extern cvar_t r_alphasort;
+extern cvar_t r_md5;
 extern cvar_t r_lerpmodels;
 extern cvar_t r_lerpmove;
 extern cvar_t joy_deadzone_look;
@@ -3235,6 +3236,7 @@ void M_Menu_Gamepad_f (void)
 	def (VID_OPT_SCALE,			"Render Scale")		\
 	def (VID_OPT_ANISO,			"Anisotropic")		\
 	def (VID_OPT_TEXFILTER,		"Textures")			\
+	def (VID_OPT_MD5,			"Models")			\
 	def (VID_OPT_ANIMLERP,		"Animations")		\
 	def (VID_OPT_PARTICLES,		"Particles")		\
 	def (VID_OPT_ALPHAMODE,		"Transparency")		\
@@ -3700,6 +3702,9 @@ void M_AdjustSliders (int dir)
 	case VID_OPT_TEXFILTER:
 		VID_Menu_ChooseNextTexFilter ();
 		break;
+	case VID_OPT_MD5:
+		Cbuf_AddText ("toggle r_md5\n");
+		break;
 	case VID_OPT_ANIMLERP:
 		Cvar_SetValueQuick (&r_lerpmodels, !r_lerpmove.value);
 		Cvar_SetValueQuick (&r_lerpmove, !r_lerpmove.value);
@@ -4136,6 +4141,9 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 	case VID_OPT_TEXFILTER:
 		M_Print (x, y, VID_Menu_GetTexFilterDesc ());
+		break;
+	case VID_OPT_MD5:
+		M_Print (x, y, r_md5.value ? "Smooth" : "Classic");
 		break;
 	case VID_OPT_ANIMLERP:
 		M_Print (x, y, r_lerpmodels.value ? "Smooth" : "Classic");

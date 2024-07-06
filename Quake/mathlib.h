@@ -53,15 +53,18 @@ static inline int IS_NAN (float x) {
 
 #define Q_rint(x) ((x) > 0 ? (int)((x) + 0.5) : (int)((x) - 0.5)) //johnfitz -- from joequake
 
-#define DotProduct(x,y) ((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
-#define DoublePrecisionDotProduct(x,y) ((double)(x)[0]*(y)[0]+(double)(x)[1]*(y)[1]+(double)(x)[2]*(y)[2])
-#define VectorSubtract(a,b,c) {(c)[0]=(a)[0]-(b)[0];(c)[1]=(a)[1]-(b)[1];(c)[2]=(a)[2]-(b)[2];}
-#define VectorAdd(a,b,c) {(c)[0]=(a)[0]+(b)[0];(c)[1]=(a)[1]+(b)[1];(c)[2]=(a)[2]+(b)[2];}
-#define VectorCopy(a,b) {(b)[0]=(a)[0];(b)[1]=(a)[1];(b)[2]=(a)[2];}
+#define DotProduct(x,y)					((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
+#define DoublePrecisionDotProduct(x,y)	((double)(x)[0]*(y)[0]+(double)(x)[1]*(y)[1]+(double)(x)[2]*(y)[2])
+#define VectorSubtract(a,b,c)			do {(c)[0]=(a)[0]-(b)[0];(c)[1]=(a)[1]-(b)[1];(c)[2]=(a)[2]-(b)[2];} while (0)
+#define VectorAdd(a,b,c)				do {(c)[0]=(a)[0]+(b)[0];(c)[1]=(a)[1]+(b)[1];(c)[2]=(a)[2]+(b)[2];} while (0)
+#define VectorCopy(a,b)					do {(b)[0]=(a)[0];(b)[1]=(a)[1];(b)[2]=(a)[2];} while (0)
+#define VectorSet(v,x,y,z)				do {(v)[0]=(x);(v)[1]=(y);(v)[2]=(z);} while (0)
+#define VectorLengthSquared(v)			DotProduct(v,v)
 
 //johnfitz -- courtesy of lordhavoc
 // QuakeSpasm: To avoid strict aliasing violations, use a float/int union instead of type punning.
 #define VectorNormalizeFast(_v)\
+do\
 {\
 	union { float f; int i; } _y, _number;\
 	_number.f = DotProduct((_v), (_v));\
@@ -71,19 +74,20 @@ static inline int IS_NAN (float x) {
 		_y.f = _y.f * (1.5f - (_number.f * 0.5f * _y.f * _y.f));\
 		VectorScale((_v), _y.f, (_v));\
 	}\
-}
+} while (0)
 
 void TurnVector (vec3_t out, const vec3_t forward, const vec3_t side, float angle); //johnfitz
 void VectorAngles (const vec3_t forward, vec3_t angles); //johnfitz
 
 void VectorMA (const vec3_t veca, float scale, const vec3_t vecb, vec3_t vecc);
+void VectorLerp (const vec3_t veca, const vec3_t vecb, float frac, vec3_t dst);
 
 vec_t _DotProduct (vec3_t v1, vec3_t v2);
 void _VectorSubtract (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorAdd (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorCopy (vec3_t in, vec3_t out);
 
-int VectorCompare (vec3_t v1, vec3_t v2);
+int VectorCompare (const vec3_t v1, const vec3_t v2);
 vec_t VectorLength (vec3_t v);
 void CrossProduct (vec3_t v1, vec3_t v2, vec3_t cross);
 float VectorNormalize (vec3_t v);		// returns vector length
@@ -117,6 +121,9 @@ void IdentityMatrix(float matrix[16]);
 void ApplyScale(float matrix[16], float x, float y, float z);
 void ApplyTranslation(float matrix[16], float x, float y, float z);
 void MatrixTranspose4x3(const float src[16], float dst[12]);
+void ProjectVector(const vec3_t src, const float matrix[16], vec3_t dst);
+
+qboolean RayVsBox (const vec3_t org, const vec3_t rcpdelta, const vec3_t mins, const vec3_t maxs, float *frac);
 
 #define BOX_ON_PLANE_SIDE(emins, emaxs, p)	\
 	(((p)->type < 3)?						\

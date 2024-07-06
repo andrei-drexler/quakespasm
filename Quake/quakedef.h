@@ -239,9 +239,9 @@ typedef struct
 	int	errstate;
 } quakeparms_t;
 
+#include "sys.h"
 #include "common.h"
 #include "bspfile.h"
-#include "sys.h"
 #include "zone.h"
 #include "mathlib.h"
 #include "cvar.h"

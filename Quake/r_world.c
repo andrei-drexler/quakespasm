@@ -78,7 +78,9 @@ static void R_MarkVisSurfaces (byte* vis)
 	frame.oldskyleaf = r_oldskyleaf.value != 0.f;
 	frame.framecount = r_framecount;
 
-	vissize = (vissize + 3) & ~3; // round up to uint
+	COMPILE_TIME_ASSERT (vis_alignment_must_be_power_of_2, (VIS_ALIGN & (VIS_ALIGN - 1)) == 0);
+	COMPILE_TIME_ASSERT (vis_alignment_must_be_multiple_of_uint, (VIS_ALIGN & 3) == 0);
+	vissize = (vissize + VIS_ALIGN_MASK) & ~VIS_ALIGN_MASK; // round up
 
 	GL_UseProgram (glprogs.clear_indirect);
 	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, gl_bmodel_indirect_buffer, 0, cl.worldmodel->texofs[TEXTYPE_COUNT] * sizeof(bmodel_draw_indirect_t));

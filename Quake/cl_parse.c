@@ -458,6 +458,7 @@ void CL_ParseUpdate (int bits)
 	entity_t	*ent;
 	int		num;
 	int		skin;
+	int		prevframe;
 
 	if (cls.signon == SIGNONS - 1)
 	{	// first update is the final signon stage
@@ -509,6 +510,7 @@ void CL_ParseUpdate (int bits)
 	else
 		modnum = ent->baseline.modelindex;
 
+	prevframe = ent->frame;
 	if (bits & U_FRAME)
 		ent->frame = MSG_ReadByte ();
 	else
@@ -639,7 +641,9 @@ void CL_ParseUpdate (int bits)
 	// or randomized
 		if (model)
 		{
-			if (model->synctype == ST_RAND)
+			if (model->synctype == ST_FRAMETIME)
+				ent->syncbase = -cl.time;
+			else if (model->synctype == ST_RAND)
 				ent->syncbase = (float)(rand()&0x7fff) / 0x7fff;
 			else
 				ent->syncbase = 0.0;
@@ -652,6 +656,8 @@ void CL_ParseUpdate (int bits)
 		ent->lerpflags |= LERP_RESETANIM; //johnfitz -- don't lerp animation across model changes
 	}
 	//johnfitz
+	else if (model && model->synctype == ST_FRAMETIME && ent->frame != prevframe)
+		ent->syncbase = -cl.time;
 
 	if ( forcelink )
 	{	// didn't have an update last message

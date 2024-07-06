@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 
 static byte *Image_LoadPCX (FILE *f, int *width, int *height);
+static byte *Image_LoadLMP (FILE *f, int *width, int *height);
 
 #ifdef __GNUC__
 	// Suppress unused function warnings on GCC/clang
@@ -100,7 +101,7 @@ Image_LoadImage
 returns a pointer to hunk allocated RGBA data
 ============
 */
-byte *Image_LoadImage (const char *name, int *width, int *height)
+byte *Image_LoadImage (const char *name, int *width, int *height, enum srcformat *fmt)
 {
 	static const char *const stbi_formats[] = {"png", "tga", "jpg", NULL};
 	FILE	*f;
@@ -120,9 +121,11 @@ byte *Image_LoadImage (const char *name, int *width, int *height)
 				memcpy (hunkdata, data, numbytes);
 				free (data);
 				data = hunkdata;
+				*fmt = SRC_RGBA;
 			}
 			else
 				Con_Warning ("couldn't load %s (%s)\n", loadfilename, stbi_failure_reason ());
+			fclose (f);
 			return data;
 		}
 	}
@@ -130,7 +133,18 @@ byte *Image_LoadImage (const char *name, int *width, int *height)
 	q_snprintf (loadfilename, sizeof(loadfilename), "%s.pcx", name);
 	COM_FOpenFile (loadfilename, &f, NULL);
 	if (f)
-		return Image_LoadPCX (f, width, height);
+	{
+		*fmt = SRC_RGBA;
+		return Image_LoadPCX(f, width, height);
+	}
+
+	q_snprintf (loadfilename, sizeof(loadfilename), "%s.lmp", name);
+	COM_FOpenFile (loadfilename, &f, NULL);
+	if (f)
+	{
+		*fmt = SRC_INDEXED;
+		return Image_LoadLMP (f, width, height);
+	}
 
 	return NULL;
 }
@@ -298,6 +312,50 @@ static byte *Image_LoadPCX (FILE *f, int *width, int *height)
 
 	*width = w;
 	*height = h;
+	return data;
+}
+
+//==============================================================================
+//
+//  QPIC (aka '.lmp')
+//
+//==============================================================================
+
+typedef struct
+{
+	unsigned int width, height;
+} lmpheader_t;
+
+/*
+============
+Image_LoadLMP
+============
+*/
+static byte *Image_LoadLMP (FILE *f, int *width, int *height)
+{
+	lmpheader_t	qpic;
+	size_t		pix;
+	void		*data;
+
+	fread(&qpic, sizeof(qpic), 1, f);
+	qpic.width = LittleLong (qpic.width);
+	qpic.height = LittleLong (qpic.height);
+
+	pix = qpic.width*qpic.height;
+
+	if (com_filesize != 8+pix)
+	{
+		fclose(f);
+		return NULL;
+	}
+
+	data = (byte *) Hunk_Alloc(pix); //+1 to allow reading padding byte on last line
+	fread(data, 1, pix, f);
+	fclose(f);
+
+	*width = qpic.width;
+	*height = qpic.height;
+
 	return data;
 }
 

@@ -100,6 +100,9 @@ cvar_t	r_showtris = {"r_showtris", "0", CVAR_NONE};
 cvar_t	r_showbboxes = {"r_showbboxes", "0", CVAR_NONE};
 cvar_t	r_showbboxes_think = {"r_showbboxes_think", "0", CVAR_NONE}; // 0=show all; 1=thinkers only; -1=non-thinkers only
 cvar_t	r_showbboxes_health = {"r_showbboxes_health", "0", CVAR_NONE}; // 0=show all; 1=healthy only; -1=non-healthy only
+cvar_t	r_showbboxes_links = {"r_showbboxes_links", "3", CVAR_NONE}; // 0=off; 1=outgoing only; 2=incoming only; 3=incoming+outgoing
+cvar_t	r_showbboxes_targets = {"r_showbboxes_targets", "1", CVAR_NONE};
+cvar_t	r_showfields = {"r_showfields", "0", CVAR_NONE};
 cvar_t	r_lerpmodels = {"r_lerpmodels", "1", CVAR_ARCHIVE};
 cvar_t	r_lerpmove = {"r_lerpmove", "1", CVAR_ARCHIVE};
 cvar_t	r_nolerp_list = {"r_nolerp_list", "progs/flame.mdl,progs/flame2.mdl,progs/braztall.mdl,progs/brazshrt.mdl,progs/longtrch.mdl,progs/flame_pyre.mdl,progs/v_saw.mdl,progs/v_xfist.mdl,progs/h2stuff/newfire.mdl", CVAR_NONE};
@@ -1116,7 +1119,7 @@ static void R_FlushDebugGeometry (void)
 		GLbyte	*ofs;
 
 		GL_UseProgram (glprogs.debug3d);
-		GL_SetState (GLS_BLEND_OPAQUE | GLS_NO_ZTEST | GLS_NO_ZWRITE | GLS_CULL_NONE | GLS_ATTRIBS(2));
+		GL_SetState (GLS_BLEND_ALPHA | GLS_NO_ZTEST | GLS_NO_ZWRITE | GLS_CULL_NONE | GLS_ATTRIBS(2));
 
 		GL_Upload (GL_ARRAY_BUFFER, debugverts, sizeof (debugverts[0]) * numdebugverts, &buf, &ofs);
 		GL_BindBuffer (GL_ARRAY_BUFFER, buf);
@@ -1219,6 +1222,77 @@ static void R_EmitWireBox (const vec3_t mins, const vec3_t maxs, uint32_t color)
 
 /*
 ================
+R_EmitArrow
+================
+*/
+static void R_EmitArrow (const vec3_t from, const vec3_t to, uint32_t color)
+{
+	float	frac, len;
+	vec3_t	center, dir, side, tmp;
+
+	R_EmitLine (from, to, color);
+
+	VectorSubtract (to, from, dir);
+	len = VectorNormalize (dir);
+	if (len < 1e-2f)
+	{
+		VectorCopy (vup, dir);
+		VectorCopy (vright, side);
+	}
+	else
+	{
+		VectorSubtract (from, r_origin, tmp);
+		CrossProduct (dir, tmp, side);
+		VectorNormalize (side);
+	}
+
+	frac = realtime - floor (realtime);
+	VectorLerp (from, to, frac, center);
+
+	VectorMA (center, 8.f, side, tmp);
+	VectorMA (tmp, -8.f, dir, tmp);
+	R_EmitLine (tmp, center, color);
+
+	VectorMA (tmp, -16.f, side, tmp);
+	R_EmitLine (tmp, center, color);
+}
+
+/*
+================
+R_EmitEdictLink
+================
+*/
+static void R_EmitEdictLink (const edict_t *from, const edict_t *to, showbboxflags_t flags)
+{
+	vec3_t vec_from, vec_to;
+
+	if (!flags)
+		return;
+
+	VectorCopy (from->v.origin, vec_from);
+	if (!VectorCompare (from->v.mins, from->v.maxs))
+	{
+		VectorMA (vec_from, 0.5f, from->v.mins, vec_from);
+		VectorMA (vec_from, 0.5f, from->v.maxs, vec_from);
+	}
+
+	VectorCopy (to->v.origin, vec_to);
+	if (!VectorCompare (to->v.mins, to->v.maxs))
+	{
+		VectorMA (vec_to, 0.5f, to->v.mins, vec_to);
+		VectorMA (vec_to, 0.5f, to->v.maxs, vec_to);
+	}
+
+	if (flags == SHOWBBOX_LINK_BOTH)
+		R_EmitLine (vec_from, vec_to, 0x7f7f3f7f);
+	else if (flags == SHOWBBOX_LINK_OUTGOING)
+		R_EmitArrow (vec_from, vec_to, 0x7f7f3f3f);
+	else if (flags == SHOWBBOX_LINK_INCOMING)
+		R_EmitArrow (vec_to, vec_from, 0x7f3f3f7f);
+}
+
+/*
+================
 R_ShowBoundingBoxesFilter
 
 r_showbboxes_filter artifact =trigger_secret
@@ -1249,6 +1323,41 @@ static qboolean R_ShowBoundingBoxesFilter (edict_t *ed)
 	return false;
 }
 
+static edict_t **bbox_edicts = NULL;		// all edicts shown by r_showbboxes & co
+edict_t **bbox_linked = NULL;				// focused edict, followed by edicts linked from/to it
+
+/*
+================
+R_AddHighlightedEntity
+================
+*/
+static void R_AddHighlightedEntity (edict_t *ed, showbboxflags_t flags)
+{
+	if (ed->showbboxframe != r_framecount)
+	{
+		ed->showbboxframe = r_framecount;
+		ed->showbboxflags = SHOWBBOX_LINK_NONE;
+		VEC_PUSH (bbox_edicts, ed);
+	}
+
+	if (!(ed->showbboxflags & flags) && (int)r_showbboxes_links.value & flags)
+	{
+		VEC_PUSH (bbox_linked, ed);
+		ed->showbboxflags |= flags;
+	}
+}
+
+/*
+================
+R_ClearBoundingBoxes
+================
+*/
+void R_ClearBoundingBoxes (void)
+{
+	VEC_CLEAR (bbox_edicts);
+	VEC_CLEAR (bbox_linked);
+}
+
 /*
 ================
 R_ShowBoundingBoxes -- johnfitz
@@ -1261,12 +1370,19 @@ static void R_ShowBoundingBoxes (void)
 	extern		edict_t *sv_player;
 	byte		*pvs;
 	vec3_t		mins,maxs;
-	edict_t		*ed;
-	int			i, mode;
+	edict_t		*ed, *focused;
+	int			i, j, mode;
 	uint32_t	color;
 	qcvm_t 		*oldvm;	//in case we ever draw a scene from within csqc.
+	float		dist, bestdist, extend;
+	vec3_t		rcpdelta;
 
-	if (!r_showbboxes.value || cl.maxclients > 1 || !r_drawentities.value || !sv.active)
+	VEC_CLEAR (bbox_edicts);
+	VEC_CLEAR (bbox_linked);
+	focused = NULL;
+
+	mode = abs ((int)r_showbboxes.value);
+	if ((!mode && !r_showfields.value) || cl.maxclients > 1 || !r_drawentities.value || !sv.active)
 		return;
 
 	GL_BeginGroup ("Show bounding boxes");
@@ -1275,8 +1391,8 @@ static void R_ShowBoundingBoxes (void)
 	PR_SwitchQCVM(NULL);
 	PR_SwitchQCVM(&sv.qcvm);
 
-	mode = abs ((int)r_showbboxes.value);
-	if (mode >= 2)
+	// Use PVS if r_showbboxes >= 2, or if r_showbboxes is 0 (which means r_showfields is active)
+	if (mode >= 2 || mode == 0)
 	{
 		vec3_t org;
 		VectorAdd (sv_player->v.origin, sv_player->v.view_ofs, org);
@@ -1285,6 +1401,12 @@ static void R_ShowBoundingBoxes (void)
 	else
 		pvs = NULL;
 
+	// Compute ray reciprocal delta
+	for (i = 0; i < 3; i++)
+		rcpdelta[i] = 1.f / (gl_farclip.value * vpn[i]);
+
+	// Iterate over all server entities
+	bestdist = FLT_MAX;
 	for (i=1, ed=NEXT_EDICT(qcvm->edicts) ; i<qcvm->num_edicts ; i++, ed=NEXT_EDICT(ed))
 	{
 		if (ed == sv_player || ed->free)
@@ -1296,9 +1418,23 @@ static void R_ShowBoundingBoxes (void)
 		if (r_showbboxes_health.value && (ed->v.health <= 0) == (r_showbboxes_health.value > 0))
 			continue;
 
+		// Compute bounding box (16 units wide for point entities)
+		extend = VectorCompare (ed->v.mins, ed->v.maxs) ? 8.f : 0.f;
+		for (j = 0; j < 3; j++)
+		{
+			mins[j] = ed->v.origin[j] + ed->v.mins[j] - extend;
+			maxs[j] = ed->v.origin[j] + ed->v.maxs[j] + extend;
+		}
+
+		// Frustum culling
+		if (R_CullBox (mins, maxs))
+			continue;
+
+		// Classname filter
 		if (!R_ShowBoundingBoxesFilter(ed))
 			continue;
 
+		// PVS filter
 		if (pvs)
 		{
 			qboolean inpvs =
@@ -1310,28 +1446,115 @@ static void R_ShowBoundingBoxes (void)
 				continue;
 		}
 
-		if (r_showbboxes.value > 0.f)
+		// Keep track of the closest bounding box intersecting the center ray
+		// Note: if we're inside the box (dist == 0), we ignore this entity
+		if (RayVsBox (r_origin, rcpdelta, mins, maxs, &dist) && dist > 0.f && dist < bestdist)
+		{
+			bestdist = dist;
+			focused = ed;
+		}
+
+		// Add edict to list
+		R_AddHighlightedEntity (ed, SHOWBBOX_LINK_NONE);
+	}
+
+	if (focused)
+		VEC_PUSH (bbox_linked, focused);
+
+	if (focused && r_showbboxes_links.value)
+	{
+		// Find outgoing links (entity field references other than .chain)
+		if ((int)r_showbboxes_links.value & SHOWBBOX_LINK_OUTGOING)
+		{
+			for (i = 0; i < qcvm->numentityfields; i++)
+			{
+				eval_t *val = (eval_t *)((char *)&focused->v + qcvm->entityfieldofs[i]);
+				if (qcvm->entityfieldofs[i] == offsetof (entvars_t, chain) || !val->edict)
+					continue;
+				ed = PROG_TO_EDICT (val->edict);
+				if (ed == focused || ed->free || ed == sv_player)
+					continue;
+				R_AddHighlightedEntity (ed, SHOWBBOX_LINK_OUTGOING);
+			}
+		}
+
+		// Inspect all other edicts to find incoming links
+		// (either entity field references or target/targetname matches)
+		if ((int)r_showbboxes_links.value & SHOWBBOX_LINK_INCOMING || r_showbboxes_targets.value)
+		{
+			const char *focus_target = PR_GetString (focused->v.target);
+			const char *focus_targetname = PR_GetString (focused->v.targetname);
+
+			for (i=1, ed=NEXT_EDICT(qcvm->edicts) ; i<qcvm->num_edicts ; i++, ed=NEXT_EDICT(ed))
+			{
+				if (ed == sv_player || ed->free || ed == focused)
+					continue;
+
+				// Check target/targetname matches
+				if (r_showbboxes_targets.value && (*focus_target || *focus_targetname))
+				{
+					const char *target = PR_GetString (ed->v.target);
+					const char *targetname = PR_GetString (ed->v.targetname);
+
+					if (*focus_targetname && !strcmp (focus_targetname, target))
+						R_AddHighlightedEntity (ed, SHOWBBOX_LINK_INCOMING);
+					if (*focus_target && !strcmp (focus_target, targetname))
+						R_AddHighlightedEntity (ed, SHOWBBOX_LINK_OUTGOING);
+				}
+
+				// Check for entity field references (other than .chain)
+				if ((int)r_showbboxes_links.value & SHOWBBOX_LINK_INCOMING)
+				{
+					for (j = 0; j < qcvm->numentityfields; j++)
+					{
+						eval_t *val = (eval_t *)((char *)&ed->v + qcvm->entityfieldofs[j]);
+						if (qcvm->entityfieldofs[i] == offsetof (entvars_t, chain) || !val->edict)
+							continue;
+						if (PROG_TO_EDICT (val->edict) == focused)
+							R_AddHighlightedEntity (ed, SHOWBBOX_LINK_INCOMING);
+					}
+				}
+			}
+		}
+
+		// Draw all links
+		for (j = 0; j < (int) VEC_SIZE (bbox_linked); j++)
+			R_EmitEdictLink (focused, bbox_linked[j], bbox_linked[j]->showbboxflags);
+	}
+
+	// Draw all the matching edicts
+	for (i = 0; i < (int) VEC_SIZE (bbox_edicts); i++)
+	{
+		ed = bbox_edicts[i];
+
+		if (ed == focused)
+			color = 0xffffffff;
+		else if (ed->showbboxflags)
+			color = 0xaaaaaaaa;
+		else if (r_showbboxes.value > 0.f)
 		{
 			int modelindex = (int)ed->v.modelindex;
-			color = 0xff800080;
+			color = 0x7f800080;
 			if (modelindex >= 0 && modelindex < MAX_MODELS && sv.models[modelindex])
 			{
 				switch (sv.models[modelindex]->type)
 				{
-					case mod_brush:  color = 0xffff8080; break;
-					case mod_alias:  color = 0xff408080; break;
-					case mod_sprite: color = 0xff4040ff; break;
+					case mod_brush:  color = 0x7fff8080; break;
+					case mod_alias:  color = 0x7f408080; break;
+					case mod_sprite: color = 0x7f4040ff; break;
 					default:
 						break;
 				}
 			}
 			if (ed->v.health > 0)
-				color = 0xff0000ff;
+				color = 0x7f0000ff;
 		}
+		else if (r_showbboxes.value < 0.f)
+			color = 0x7fffffff;
 		else
-			color = 0xffffffff;
+			color = 0x5f7f7f7f;
 
-		if (ed->v.mins[0] == ed->v.maxs[0] && ed->v.mins[1] == ed->v.maxs[1] && ed->v.mins[2] == ed->v.maxs[2])
+		if (VectorCompare (ed->v.mins, ed->v.maxs))
 		{
 			//point entity
 			R_EmitWirePoint (ed->v.origin, color);
@@ -1344,6 +1567,8 @@ static void R_ShowBoundingBoxes (void)
 			R_EmitWireBox (mins, maxs, color);
 		}
 	}
+
+	VEC_CLEAR (bbox_edicts);
 
 	PR_SwitchQCVM(NULL);
 	PR_SwitchQCVM(oldvm);

@@ -165,6 +165,8 @@ void Vec_Append (void **pvec, size_t element_size, const void *data, size_t coun
 void Vec_Clear (void **pvec);
 void Vec_Free (void **pvec);
 
+void MultiString_Append (char **pvec, const char *str);
+
 //============================================================================
 
 static inline qboolean GetBit (const uint32_t *arr, uint32_t i)
@@ -375,7 +377,7 @@ typedef struct searchpath_s
 extern searchpath_t *com_searchpaths;
 extern searchpath_t *com_base_searchpaths;
 
-extern THREAD_LOCAL int com_filesize;
+extern THREAD_LOCAL qfileofs_t com_filesize;
 struct cache_user_s;
 
 #define MAX_BASEDIRS 64
