@@ -3,7 +3,7 @@
 Name=Ironwail
 Comment=A modernised fork of the Quake engine
 Exec=ironwail
-Icon=io.github.andrei-drexler.ironwail
+Icon=io.github.andrei_drexler.ironwail
 StartupNotify=true
 PrefersNonDefaultGPU=true
 Terminal=false
