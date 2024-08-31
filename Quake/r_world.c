@@ -342,6 +342,37 @@ static void R_AddBModelCall (int index, int first_instance, int num_instances, t
 	++num_bmodel_calls;
 }
 
+/*
+=============
+R_ChooseBModelProgram
+=============
+*/
+static GLuint R_ChooseBModelProgram (qboolean oit, qboolean alphatest)
+{
+	extern cvar_t r_softemu_lightmap_banding;
+
+	switch (softemu)
+	{
+	case SOFTEMU_BANDED:
+		if (r_softemu_lightmap_banding.value != 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][1][alphatest];
+
+	case SOFTEMU_COARSE:
+		if (r_softemu_lightmap_banding.value > 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][1][alphatest];
+
+	default:
+		if (r_softemu_lightmap_banding.value > 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][0][alphatest];
+	}
+}
+
 typedef enum {
 	BP_SOLID,
 	BP_ALPHATEST,
@@ -383,12 +414,12 @@ static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass
 	case BP_SOLID:
 		texbegin = 0;
 		texend = TEXTYPE_CUTOUT;
-		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_SOLID];
+		program = R_ChooseBModelProgram (oit, false);
 		break;
 	case BP_ALPHATEST:
 		texbegin = TEXTYPE_CUTOUT;
 		texend = TEXTYPE_CUTOUT + 1;
-		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_ALPHATEST];
+		program = R_ChooseBModelProgram (oit, true);
 		break;
 	case BP_SKYLAYERS:
 		texbegin = TEXTYPE_SKY;

@@ -2345,15 +2345,6 @@ static void PF_pow(void)
 {
 	G_FLOAT(OFS_RETURN) = pow(G_FLOAT(OFS_PARM0), G_FLOAT(OFS_PARM1));
 }
-static void PF_Logarithm(void)
-{
-	//log2(v) = ln(v)/ln(2)
-	double r;
-	r = log(G_FLOAT(OFS_PARM0));
-	if (qcvm->argc > 1)
-		r /= log(G_FLOAT(OFS_PARM1));
-	G_FLOAT(OFS_RETURN) = r;
-}
 static void PF_mod(void)
 {
 	float a = G_FLOAT(OFS_PARM0);
@@ -2402,31 +2393,6 @@ static void PF_bound(void)
 	if (curval < minval)
 		curval = minval;
 	G_FLOAT(OFS_RETURN) = curval;
-}
-static void PF_anglemod(void)
-{
-	float v = G_FLOAT(OFS_PARM0);
-
-	while (v >= 360)
-		v = v - 360;
-	while (v < 0)
-		v = v + 360;
-
-	G_FLOAT(OFS_RETURN) = v;
-}
-static void PF_bitshift(void)
-{
-	int bitmask = G_FLOAT(OFS_PARM0);
-	int shift = G_FLOAT(OFS_PARM1);
-	if (shift < 0)
-		bitmask >>= -shift;
-	else
-		bitmask <<= shift;
-	G_FLOAT(OFS_RETURN) = bitmask;
-}
-static void PF_crossproduct(void)
-{
-	CrossProduct(G_VECTOR(OFS_PARM0), G_VECTOR(OFS_PARM1), G_VECTOR(OFS_RETURN));
 }
 static void PF_vectorvectors(void)
 {
@@ -3129,16 +3095,6 @@ static struct {
 } qctoken[MAXQCTOKENS];
 static unsigned int qctoken_count;
 
-static void tokenize_flush(void)
-{
-	while(qctoken_count > 0)
-	{
-		qctoken_count--;
-		free(qctoken[qctoken_count].token);
-	}
-	qctoken_count = 0;
-}
-
 static void PF_ArgC(void)
 {
 	G_FLOAT(OFS_RETURN) = qctoken_count;
@@ -3190,97 +3146,6 @@ static void PF_tokenize_console(void)
 	G_FLOAT(OFS_RETURN) = tokenizeqc(G_STRING(OFS_PARM0), false);
 }
 
-static void PF_tokenizebyseparator(void)
-{
-	const char *str = G_STRING(OFS_PARM0);
-	const char *sep[7];
-	int seplen[7];
-	int seps = 0, s;
-	const char *start = str;
-	int tlen;
-	qboolean found = true;
-
-	while (seps < qcvm->argc - 1 && seps < 7)
-	{
-		sep[seps] = G_STRING(OFS_PARM1 + seps*3);
-		seplen[seps] = strlen(sep[seps]);
-		seps++;
-	}
-
-	tokenize_flush();
-
-	qctoken[qctoken_count].start = 0;
-	if (*str)
-	for(;;)
-	{
-		found = false;
-		/*see if its a separator*/
-		if (!*str)
-		{
-			qctoken[qctoken_count].end = str - start;
-			found = true;
-		}
-		else
-		{
-			for (s = 0; s < seps; s++)
-			{
-				if (!strncmp(str, sep[s], seplen[s]))
-				{
-					qctoken[qctoken_count].end = str - start;
-					str += seplen[s];
-					found = true;
-					break;
-				}
-			}
-		}
-		/*it was, split it out*/
-		if (found)
-		{
-			tlen = qctoken[qctoken_count].end - qctoken[qctoken_count].start;
-			qctoken[qctoken_count].token = malloc(tlen + 1);
-			memcpy(qctoken[qctoken_count].token, start + qctoken[qctoken_count].start, tlen);
-			qctoken[qctoken_count].token[tlen] = 0;
-
-			qctoken_count++;
-
-			if (*str && qctoken_count < MAXQCTOKENS)
-				qctoken[qctoken_count].start = str - start;
-			else
-				break;
-		}
-		str++;
-	}
-	G_FLOAT(OFS_RETURN) = qctoken_count;
-}
-
-static void PF_argv_start_index(void)
-{
-	int idx = G_FLOAT(OFS_PARM0);
-
-	/*negative indexes are relative to the end*/
-	if (idx < 0)
-		idx += qctoken_count;	
-
-	if ((unsigned int)idx >= qctoken_count)
-		G_FLOAT(OFS_RETURN) = -1;
-	else
-		G_FLOAT(OFS_RETURN) = qctoken[idx].start;
-}
-
-static void PF_argv_end_index(void)
-{
-	int idx = G_FLOAT(OFS_PARM0);
-
-	/*negative indexes are relative to the end*/
-	if (idx < 0)
-		idx += qctoken_count;	
-
-	if ((unsigned int)idx >= qctoken_count)
-		G_FLOAT(OFS_RETURN) = -1;
-	else
-		G_FLOAT(OFS_RETURN) = qctoken[idx].end;
-}
-
 static void PF_ArgV(void)
 {
 	int idx = G_FLOAT(OFS_PARM0);
@@ -3300,52 +3165,6 @@ static void PF_ArgV(void)
 }
 
 //conversions (mostly string)
-static void PF_strtoupper(void)
-{
-	const char *in = G_STRING(OFS_PARM0);
-	char *out, *result = PR_GetTempString();
-	for (out = result; *in && out < result+STRINGTEMP_LENGTH-1;)
-		*out++ = q_toupper(*in++);
-	*out = 0;
-	G_INT(OFS_RETURN) = PR_SetEngineString(result);
-}
-static void PF_strtolower(void)
-{
-	const char *in = G_STRING(OFS_PARM0);
-	char *out, *result = PR_GetTempString();
-	for (out = result; *in && out < result+STRINGTEMP_LENGTH-1;)
-		*out++ = q_tolower(*in++);
-	*out = 0;
-	G_INT(OFS_RETURN) = PR_SetEngineString(result);
-}
-#include <time.h>
-static void PF_strftime(void)
-{
-	const char *in = G_STRING(OFS_PARM1);
-	char *result = PR_GetTempString();
-
-	time_t ctime;
-	struct tm *tm;
-
-	ctime = time(NULL);
-
-	if (G_FLOAT(OFS_PARM0))
-		tm = localtime(&ctime);
-	else
-		tm = gmtime(&ctime);
-
-#ifdef _WIN32
-	//msvc sucks. this is a crappy workaround.
-	if (!strcmp(in, "%R"))
-		in = "%H:%M";
-	else if (!strcmp(in, "%F"))
-		in = "%Y-%m-%d";
-#endif
-
-	strftime(result, STRINGTEMP_LENGTH, in, tm);
-
-	G_INT(OFS_RETURN) = PR_SetEngineString(result);
-}
 static void PF_stof(void)
 {
 	G_FLOAT(OFS_RETURN) = atof(G_STRING(OFS_PARM0));
@@ -3360,30 +3179,10 @@ static void PF_stov(void)
 	s = COM_Parse(s);
 	G_VECTOR(OFS_RETURN)[2] = atof(com_token);
 }
-static void PF_stoi(void)
-{
-	G_INT(OFS_RETURN) = atoi(G_STRING(OFS_PARM0));
-}
-static void PF_itos(void)
-{
-	char *result = PR_GetTempString();
-	q_snprintf(result, STRINGTEMP_LENGTH, "%i", G_INT(OFS_PARM0));
-	G_INT(OFS_RETURN) = PR_SetEngineString(result);
-}
 static void PF_etos(void)
 {	//yes, this is lame
 	char *result = PR_GetTempString();
 	q_snprintf(result, STRINGTEMP_LENGTH, "entity %i", G_EDICTNUM(OFS_PARM0));
-	G_INT(OFS_RETURN) = PR_SetEngineString(result);
-}
-static void PF_stoh(void)
-{
-	G_INT(OFS_RETURN) = strtoul(G_STRING(OFS_PARM0), NULL, 16);
-}
-static void PF_htos(void)
-{
-	char *result = PR_GetTempString();
-	q_snprintf(result, STRINGTEMP_LENGTH, "%x", G_INT(OFS_PARM0));
 	G_INT(OFS_RETURN) = PR_SetEngineString(result);
 }
 static void PF_ftoi(void)

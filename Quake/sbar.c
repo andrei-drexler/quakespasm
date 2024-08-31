@@ -487,7 +487,11 @@ void Sbar_SoloScoreboard (void)
 		Sbar_DrawString ((left + right) / 2 - strlen (str) * 4, 12, str);
 
 		if (cl.levelname[0])
-			q_snprintf (str, sizeof(str), "%s (%s)", cl.levelname, cl.mapname);
+		{
+			char cleanname[sizeof (cl.levelname)];
+			Mod_SanitizeMapDescription (cleanname, sizeof (cleanname), cl.levelname);
+			q_snprintf (str, sizeof (str), "%s (%s)", cleanname, cl.mapname);
+		}
 		else
 			q_strlcpy (str, cl.mapname, sizeof(str));
 		len = strlen (str);
@@ -504,7 +508,10 @@ void Sbar_SoloScoreboard (void)
 	sprintf (str,"%i:%i%i", minutes, tens, units);
 	Sbar_DrawString ((left + right)/2 - strlen(str)*4, 12, str);
 
-	len = q_strlcpy (str, cl.levelname[0] ? cl.levelname : cl.mapname, sizeof(str));
+	if (cl.levelname[0])
+		len = Mod_SanitizeMapDescription (str, sizeof (str), cl.levelname);
+	else
+		len = q_strlcpy (str, cl.mapname, sizeof(str));
 	if (len > 40)
 		Sbar_DrawScrollString (0, 4, 320, str);
 	else

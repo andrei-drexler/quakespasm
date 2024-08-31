@@ -42,12 +42,6 @@ void SV_CalcStats(client_t *client, int *statsi, float *statsf, const char **sta
 	size_t i;
 	edict_t *ent = client->edict;
 	//FIXME: string stats!
-	int items;
-	eval_t *val = GetEdictFieldValue(ent, qcvm->extfields.items2);
-	if (val)
-		items = (int)ent->v.items | ((int)val->_float << 23);
-	else
-		items = (int)ent->v.items | ((int)pr_global_struct->serverflags << 28);
 
 	memset(statsi, 0, sizeof(*statsi)*MAX_CL_STATS);
 	memset(statsf, 0, sizeof(*statsf)*MAX_CL_STATS);
@@ -156,6 +150,7 @@ void SV_Init (void)
 	extern	cvar_t	sv_aim;
 	extern	cvar_t	sv_altnoclip; //johnfitz
 	extern	cvar_t	sv_gameplayfix_random;
+	extern	cvar_t	sv_gameplayfix_elevators;
 	extern	cvar_t	sv_autoload;
 	extern	cvar_t	sv_autosave;
 	extern	cvar_t	sv_autosave_interval;
@@ -177,6 +172,7 @@ void SV_Init (void)
 	Cvar_RegisterVariable (&pr_checkextension);
 	Cvar_RegisterVariable (&sv_altnoclip); //johnfitz
 	Cvar_RegisterVariable (&sv_gameplayfix_random);
+	Cvar_RegisterVariable (&sv_gameplayfix_elevators);
 	Cvar_RegisterVariable (&sv_netsort);
 	Cvar_RegisterVariable (&sv_autoload);
 	Cvar_RegisterVariable (&sv_autosave);
@@ -1778,6 +1774,8 @@ void SV_SpawnServer (const char *server)
 	/* Host_ClearMemory() called above already cleared the whole sv structure */
 	qcvm->max_edicts = CLAMP (MIN_EDICTS,(int)max_edicts.value,MAX_EDICTS); //johnfitz -- max_edicts cvar
 	qcvm->edicts = (edict_t *) malloc (qcvm->max_edicts*qcvm->edict_size); // ericw -- sv.edicts switched to use malloc()
+	if (!qcvm->edicts)
+		Sys_Error ("SV_SpawnServer: out of memory (%d edicts x %d bytes)", qcvm->max_edicts, qcvm->edict_size);
 	ClearLink (&qcvm->free_edicts);
 
 	sv.datagram.maxsize = sizeof(sv.datagram_buf);

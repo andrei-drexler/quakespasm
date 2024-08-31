@@ -101,6 +101,46 @@ float	anglemod(float a)
 	return a;
 }
 
+/*
+==================
+NormalizeAngle
+
+Returns a value between -180 and 180
+==================
+*/
+float NormalizeAngle (float degrees)
+{
+	degrees += 180.f;
+	// Note: can't use fmod because of the way it handles negative values
+	degrees -= floor (degrees * (1.f/360.f)) * 360.f;
+	degrees -= 180.f;
+	return degrees;
+}
+
+/*
+==================
+AngleDifference
+
+Returns a value between -180 and 180
+==================
+*/
+float AngleDifference (float dega, float degb)
+{
+	return NormalizeAngle (dega - degb);
+}
+
+/*
+==================
+LerpAngle
+
+Returns a value between -180 and 180
+==================
+*/
+float LerpAngle (float degfrom, float degto, float frac)
+{
+	return NormalizeAngle (degfrom + AngleDifference (degto, degfrom) * frac);
+}
+
 
 /*
 ==================
@@ -336,6 +376,17 @@ int Q_nextPow2(int val)
 	val |= val >> 16;
 	val++;
 	return val;
+}
+
+float GetFraction (float val, float minval, float maxval)
+{
+	return (val - minval) / (maxval - minval);
+}
+
+float GetClampedFraction (float val, float minval, float maxval)
+{
+	val = GetFraction (val, minval, maxval);
+	return CLAMP (0.f, val, 1.f);
 }
 
 /*

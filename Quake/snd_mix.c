@@ -31,6 +31,9 @@ short		*snd_out;
 
 static int	snd_vol;
 
+static float	snd_lofreqlevel;
+static float	snd_hifreqlevel;
+
 static void Snd_WriteLinearBlastStereo16 (void)
 {
 	int		i;
@@ -218,7 +221,10 @@ static void S_UpdateFilter(filter_t *filter, int M, float f_c)
 		filter->kernelsize = (M + 1) + 16 - ((M + 1) % 16);
 		filter->memory = (float *) calloc(filter->kernelsize, sizeof(float));
 		filter->kernel = (float *) calloc(filter->kernelsize, sizeof(float));
-		
+
+		if (!filter->memory || !filter->kernel)
+			Sys_Error ("S_UpdateFilter: out of memory (%" SDL_PRIu64 " bytes)", (uint64_t)(filter->kernelsize * sizeof (float)));
+
 		S_MakeBlackmanWindowKernel(filter->kernel, M, f_c);
 	}
 }
@@ -238,12 +244,16 @@ known to be 0 and skip 3/4 of the filter kernel.
 static void S_ApplyFilter(filter_t *filter, int *data, int stride, int count)
 {
 	int i, j;
+	size_t inputsize;
 	float *input;
 	const int kernelsize = filter->kernelsize;
 	const float *kernel = filter->kernel;
+	int mark;
 	int parity;
 
-	input = (float *) malloc(sizeof(float) * (filter->kernelsize + count));
+	mark = Hunk_LowMark ();
+	inputsize = sizeof(float) * (filter->kernelsize + count);
+	input = (float *) Hunk_AllocNoFill (inputsize);
 
 // set up the input buffer
 // memory holds the previous filter->kernelsize samples of input.
@@ -283,7 +293,7 @@ static void S_ApplyFilter(filter_t *filter, int *data, int stride, int count)
 
 	filter->parity = parity;
 
-	free(input);
+	Hunk_FreeToLowMark (mark);
 }
 
 /*
@@ -373,6 +383,36 @@ static void S_UnderwaterFilter (int endtime)
 		paintbuffer[i].left  = (int) underwater.accum[0];
 		paintbuffer[i].right = (int) underwater.accum[1];
 	}
+}
+
+static void S_UpdateLevels (int endtime)
+{
+	int i;
+	float scale;
+
+	if (snd_vol <= 0)
+	{
+		snd_lofreqlevel = snd_hifreqlevel = 0.f;
+		return;
+	}
+
+	scale = 0.5f / (snd_vol * 32768.f);
+	for (i = 0; i < endtime; i++)
+	{
+		float sample = (abs (paintbuffer[i].left) + abs (paintbuffer[i].right)) * scale;
+		snd_lofreqlevel = LERP (snd_lofreqlevel, sample, 1e-3f);
+		snd_hifreqlevel = LERP (snd_hifreqlevel, sample, 1e-2f);
+	}
+}
+
+float S_GetLoFreqLevel (void)
+{
+	return snd_lofreqlevel;
+}
+
+float S_GetHiFreqLevel (void)
+{
+	return snd_hifreqlevel;
 }
 
 /*
@@ -473,6 +513,7 @@ void S_PaintChannels (int endtime)
 		}
 
 		S_UnderwaterFilter (end - paintedtime);
+		S_UpdateLevels (end - paintedtime);
 
 	// paint in the music
 		if (s_rawend >= paintedtime)

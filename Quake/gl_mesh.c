@@ -52,7 +52,7 @@ void GL_MakeAliasModelDisplayLists (qmodel_t *aliasmodel, aliashdr_t *paliashdr)
 	aliasmesh_t *desc;
 
 	// first, copy the verts onto the hunk
-	verts = (trivertx_t *) Hunk_Alloc (paliashdr->numposes * paliashdr->numverts * sizeof(trivertx_t));
+	verts = (trivertx_t *) Hunk_AllocNoFill (paliashdr->numposes * paliashdr->numverts * sizeof(trivertx_t));
 	paliashdr->vertexes = (byte *)verts - (byte *)paliashdr;
 	for (i=0 ; i<paliashdr->numposes ; i++)
 		for (j=0 ; j<paliashdr->numverts ; j++)

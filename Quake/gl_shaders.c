@@ -37,6 +37,7 @@ GL_InitError
 */
 static void GL_InitError (const char *message, ...)
 {
+	const char *fmt;
 	char buf[4096];
 	size_t len;
 	va_list argptr;
@@ -49,7 +50,7 @@ static void GL_InitError (const char *message, ...)
 	while (len && q_isspace (buf[len - 1]))
 		buf[--len] = '\0';
 
-	Sys_Error (
+	fmt = 
 		"Your system appears to meet the minimum requirements,\n"
 		"however an error was encountered during OpenGL initialization.\n"
 		"This could be caused by a driver or an engine bug.\n"
@@ -65,7 +66,10 @@ static void GL_InitError (const char *message, ...)
 		"\n"
 		"(Note: you can press Ctrl+C to copy this text to clipboard)"
 #endif
-		,
+	;
+
+	Sys_Error (
+		fmt,
 		buf,
 		(int) sizeof (void *) * 8,
 		gl_version,

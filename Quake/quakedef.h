@@ -26,8 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // quakedef.h -- primary header for client
 
-#define	QUAKE_GAME		// as opposed to utilities
-
 #define	VERSION			1.09
 #define	GLQUAKE_VERSION		1.00
 #define	D3DQUAKE_VERSION	0.01
@@ -37,7 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	FITZQUAKE_VERSION	0.85	//johnfitz
 #define	QUAKESPASM_VERSION	0.96
-#define	QUAKESPASM_VER_PATCH	1	// helper to print a string like 0.94.7
+#define	QUAKESPASM_VER_PATCH	3	// helper to print a string like 0.94.7
 #ifndef	QUAKESPASM_VER_SUFFIX
 #define	QUAKESPASM_VER_SUFFIX		// optional version suffix string literal like "-beta1"
 #endif
@@ -46,7 +44,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define IRONWAIL_VER_MINOR		7
 #define IRONWAIL_VER_PATCH		0
 #ifndef IRONWAIL_VER_SUFFIX
-#define IRONWAIL_VER_SUFFIX			// optional version suffix string literal like "-beta1"
+#define IRONWAIL_VER_SUFFIX		"-dev"	// optional version suffix string literal like "-beta1"
 #endif
 
 #define	QS_STRINGIFY_(x)	#x
@@ -55,6 +53,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // combined version string like "0.92.1-beta1"
 #define	QUAKESPASM_VER_STRING	QS_STRINGIFY(QUAKESPASM_VERSION) "." QS_STRINGIFY(QUAKESPASM_VER_PATCH) QUAKESPASM_VER_SUFFIX
 #define	IRONWAIL_VER_STRING		QS_STRINGIFY(IRONWAIL_VER_MAJOR) "." QS_STRINGIFY(IRONWAIL_VER_MINOR) "." QS_STRINGIFY(IRONWAIL_VER_PATCH) IRONWAIL_VER_SUFFIX
+
+// SDL version the code was compiled with
+#define Q_SDL_COMPILED_VERSION_STRING	QS_STRINGIFY(SDL_MAJOR_VERSION) "." QS_STRINGIFY(SDL_MINOR_VERSION) "." QS_STRINGIFY(SDL_PATCHLEVEL)
 
 #define CONSOLE_TITLE_STRING	"Ironwail " IRONWAIL_VER_STRING
 #define WINDOW_TITLE_STRING		"Quake/Ironwail " IRONWAIL_VER_STRING
@@ -387,12 +388,22 @@ void Host_InitCommands (void);
 void Host_Init (void);
 void Host_Shutdown(void);
 void Host_Callback_Notify (cvar_t *var);	/* callback function for CVAR_NOTIFY */
-FUNC_NORETURN void Host_Error (const char *error, ...) FUNC_PRINTF(1,2);
+
+FUNC_NORETURN void Host_ReportError (const char *error, ...) FUNC_PRINTF(1,2);
 FUNC_NORETURN void Host_EndGame (const char *message, ...) FUNC_PRINTF(1,2);
 #ifdef __WATCOMC__
 #pragma aux Host_Error aborts;
 #pragma aux Host_EndGame aborts;
 #endif
+
+#define Host_Error(...)									\
+	do													\
+	{													\
+		if (Sys_IsDebuggerPresent ())					\
+			SDL_TriggerBreakpoint ();					\
+		Host_ReportError (__VA_ARGS__);					\
+	} while (0)											\
+
 double Host_GetFrameInterval (void);
 void Host_Frame (double time);
 void Host_Quit_f (void);

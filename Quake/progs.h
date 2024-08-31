@@ -272,6 +272,13 @@ typedef struct qcvm_s
 	int			numentityfields;
 	int			*entityfieldofs;
 	ddef_t		**entityfields;
+	int			*functionsizes;		// number of statements in each function
+
+	int			maxfieldofs;
+	int			*ofstofield;		// index of field at offset, or -1
+
+	int			maxglobalofs;
+	int			*ofstoglobal;		// index of global at offset, or -1
 } qcvm_t;
 
 typedef struct savedata_s
@@ -366,7 +373,8 @@ int SAVE_NUM_FOR_EDICT (savedata_t *save, edict_t *e);
 #define	E_VECTOR(e,o)		(&((float*)&e->v)[o])
 #define	E_STRING(e,o)		(PR_GetString(*(string_t *)&((float*)&e->v)[o]))
 
-extern	int		type_size[8];
+#define NUM_TYPE_SIZES 8
+extern const int	type_size[NUM_TYPE_SIZES];
 
 typedef struct builtindef_s
 {

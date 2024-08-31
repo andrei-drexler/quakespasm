@@ -52,6 +52,7 @@ extern cvar_t vid_vsync;
 extern cvar_t vid_fsaamode;
 extern cvar_t vid_fsaa;
 extern cvar_t r_softemu;
+extern cvar_t r_softemu_mdl_warp;
 extern cvar_t r_waterwarp;
 extern cvar_t r_oit;
 extern cvar_t r_alphasort;
@@ -67,6 +68,8 @@ extern cvar_t joy_invert;
 extern cvar_t joy_exponent;
 extern cvar_t joy_exponent_move;
 extern cvar_t joy_swapmovelook;
+extern cvar_t joy_flick;
+extern cvar_t joy_rumble;
 extern cvar_t gyro_enable;
 extern cvar_t gyro_mode;
 extern cvar_t gyro_turning_axis;
@@ -255,16 +258,6 @@ void M_Print (int cx, int cy, const char *str)
 	M_PrintEx (cx, cy, 8, str);
 }
 
-#define ALIGN_LEFT		0
-#define ALIGN_CENTER	1
-#define ALIGN_RIGHT		2
-
-void M_PrintAligned (int cx, int cy, int align, const char *str)
-{
-	cx -= strlen (str) * align / 2 * 8;
-	M_Print (cx, cy, str);
-}
-
 void M_PrintWhiteEx (int cx, int cy, int dim, const char *str)
 {
 	while (*str)
@@ -280,13 +273,31 @@ void M_PrintWhite (int cx, int cy, const char *str)
 	M_PrintWhiteEx (cx, cy, 8, str);
 }
 
+#define ALIGN_LEFT		0
+#define ALIGN_CENTER	1
+#define ALIGN_RIGHT		2
+
+void M_PrintAlignedEx (int cx, int cy, int align, int dim, qboolean color, const char *str)
+{
+	cx -= strlen (str) * align / 2 * dim;
+	if (color)
+		M_PrintEx (cx, cy, dim, str);
+	else
+		M_PrintWhiteEx (cx, cy, dim, str);
+}
+
+void M_PrintAligned (int cx, int cy, int align, const char *str)
+{
+	M_PrintAlignedEx (cx, cy, align, 8, true, str);
+}
+
 // TODO: smooth scrolling
 void M_PrintScroll (int x, int y, int maxwidth, const char *str, double time, qboolean color)
 {
 	int maxchars = maxwidth / 8;
 	int len = strlen (str);
 	int i, ofs;
-	char mask = color ? 128 : 0;
+	char mask = color ? QCHAR_COLOR_MASK : 0;
 
 	if (len <= maxchars)
 	{
@@ -2371,7 +2382,6 @@ void M_Setup_Key (int k)
 
 	case K_LEFTARROW:
 	//case K_MOUSE2:
-	case K_MWHEELDOWN:
 		if (setup_cursor < 2)
 			return;
 		M_ThrottledSound ("misc/menu3.wav");
@@ -2381,7 +2391,6 @@ void M_Setup_Key (int k)
 			setup_bottom = setup_bottom - 1;
 		break;
 	case K_RIGHTARROW:
-	case K_MWHEELUP:
 		if (setup_cursor < 2)
 			return;
 forward:
@@ -3094,6 +3103,8 @@ void M_Menu_Calibration_f (void)
 
 void M_Calibration_Draw (void)
 {
+	char anim[16];
+	int i, progress;
 	int y = 72;
 
 	switch (calibration_state)
@@ -3109,7 +3120,12 @@ void M_Calibration_Draw (void)
 		break;
 
 	case CALIBRATION_IN_ROGRESS:
+		progress = (int) (IN_GetGyroCalibrationProgress () * (Q_COUNTOF (anim) - 1) + 0.5f);
+		for (i = 0; i < (int) Q_COUNTOF (anim) - 1; i++)
+			anim[i] = i < progress ? QCHAR_COLORED ('.') : '.';
+		anim[i] = '\0';
 		M_PrintAligned (160, y, ALIGN_CENTER, "Calibrating, please wait...");
+		M_PrintAligned (160, y + 16, ALIGN_CENTER, anim);
 		if (!IN_IsCalibratingGyro ())
 			calibration_state = CALIBRATION_FINISHED;
 		break;
@@ -3243,6 +3259,7 @@ void M_Menu_Gamepad_f (void)
 	def (VID_OPT_WATERWARP,		"Underwater FX")	\
 	def (VID_OPT_DLIGHTS,		"Dynamic Lights")	\
 	def (VID_OPT_SOFTEMU,		"8-bit Mode")		\
+	def (VID_OPT_SOFTEMU_MDL,	"Model Warping")	\
 	def (VID_OPT_FPSLIMIT,		"FPS Limit")		\
 	def (VID_OPT_SHOWFPS,		"Show FPS")			\
 ////////////////////////////////////////////////////
@@ -3270,7 +3287,12 @@ void M_Menu_Gamepad_f (void)
 													\
 	def(GPAD_OPT_SPACE5,		"")					\
 													\
+	def(GPAD_OPT_RUMBLE,		"Vibration")		\
+													\
+	def(GPAD_OPT_SPACE6,		"")					\
+													\
 	def(GPAD_OPT_GYROENABLE,	"Gyro")				\
+	def(GPAD_OPT_FLICKSTICK,	"Flick Stick")		\
 	def(GPAD_OPT_GYROMODE,		"Gyro Button")		\
 	def(GPAD_OPT_GYROAXIS,		"Gyro Axis")		\
 	def(GPAD_OPT_GYROSENSX,		"Gyro Yaw Speed")	\
@@ -3398,6 +3420,8 @@ static qboolean M_Options_IsEnabled (int index)
 		return false;
 	if (index > GPAD_OPTIONS_FIRST && index < GPAD_OPTIONS_FIRST + GPAD_OPTIONS_ITEMS && !IN_HasGamepad ())
 		return false;
+	if (index == GPAD_OPT_RUMBLE && !IN_HasRumble ())
+		return false;
 	if (M_Options_IsGyroId (index))
 	{
 		if (!IN_HasGyro ())
@@ -3522,6 +3546,18 @@ static void M_Options_SetUIMouse (uimouse_t opt)
 	}
 }
 
+static void M_CycleCvar (cvar_t *cvar, int minval, int maxval, int dir)
+{
+	int range = maxval + 1 - minval;
+	int value = (int) cvar->value + dir;
+	value -= minval;
+	value %= range;
+	if (value < 0)
+		value += range;
+	value += minval;
+	Cvar_SetValueQuick (cvar, (float) value);
+}
+
 void M_AdjustSliders (int dir)
 {
 	int	curr_alwaysrun, target_alwaysrun;
@@ -3582,7 +3618,7 @@ void M_AdjustSliders (int dir)
 		Cvar_SetValue ("scr_sbaralpha", f);
 		break;
 	case OPT_MUSICVOL:	// music volume
-		f = bgmvolume.value + dir * 0.1;
+		f = bgmvolume.value + dir * 0.05f;
 		if (f < 0)	f = 0;
 		else if (f > 1)	f = 1;
 		Cvar_SetValue ("bgmvolume", f);
@@ -3591,7 +3627,7 @@ void M_AdjustSliders (int dir)
 		Cvar_Set ("bgm_extmusic", bgm_extmusic.value ? "0" : "1");
 		break;
 	case OPT_SNDVOL:	// sfx volume
-		f = sfxvolume.value + dir * 0.1;
+		f = sfxvolume.value + dir * 0.05f;
 		if (f < 0)	f = 0;
 		else if (f > 1)	f = 1;
 		Cvar_SetValue ("volume", f);
@@ -3724,6 +3760,9 @@ void M_AdjustSliders (int dir)
 	case VID_OPT_SOFTEMU:
 		Cvar_SetValueQuick (&r_softemu, (int)(q_max (r_softemu.value, 0.f) + 4 + dir) % 4);
 		break;
+	case VID_OPT_SOFTEMU_MDL:
+		M_CycleCvar (&r_softemu_mdl_warp, -1, 1, dir);
+		break;
 	case VID_OPT_FPSLIMIT:
 		VID_Menu_ChooseNextFPSLimit (-dir);
 		break;
@@ -3766,8 +3805,14 @@ void M_AdjustSliders (int dir)
 	case GPAD_OPT_DEADZONE_TRIG:
 		Cvar_SetValueQuick (&joy_deadzone_trigger, CLAMP (MIN_TRIGGER_DEADZONE, joy_deadzone_trigger.value + dir * 0.05f, MAX_TRIGGER_DEADZONE));
 		break;
+	case GPAD_OPT_RUMBLE:
+		Cvar_SetValueQuick (&joy_rumble, CLAMP (0.f, joy_rumble.value + dir * 0.1f, 1.f));
+		break;
 	case GPAD_OPT_GYROENABLE:
 		Cvar_SetValueQuick (&gyro_enable, !gyro_enable.value);
+		break;
+	case GPAD_OPT_FLICKSTICK:
+		Cvar_SetValueQuick (&joy_flick, !joy_flick.value);
 		break;
 	case GPAD_OPT_GYROMODE:
 		Cvar_SetValueQuick (&gyro_mode, (int)(q_max (gyro_mode.value, 0.f) + GYRO_MODE_COUNT + dir) % GYRO_MODE_COUNT);
@@ -3793,20 +3838,58 @@ void M_AdjustSliders (int dir)
 	}
 }
 
-
-void M_DrawSlider (int x, int y, float range)
+typedef struct
 {
-	int	i;
+	float		frac;
+	char		glyph;
+	char		yofs;
+} slidermarker_t;
 
-	if (range < 0)
-		range = 0;
-	if (range > 1)
-		range = 1;
+void M_DrawSliderWithMarkers (int x, int y, float range, const slidermarker_t *markers, int nummarkers, const char *desc)
+{
+	int i;
+
+	range = CLAMP (0.f, range, 1.f);
+
 	M_DrawCharacter (x-8, y, 128);
 	for (i = 0; i < SLIDER_RANGE; i++)
 		M_DrawCharacter (x + i*8, y, 129);
 	M_DrawCharacter (x+i*8, y, 130);
-	M_DrawCharacter (x + (SLIDER_RANGE-1)*8 * range, y, 131);
+
+	for (i = 0; i < nummarkers; i++)
+	{
+		const slidermarker_t *marker = &markers[i];
+		M_DrawCharacter (x + (int) ((SLIDER_RANGE-1)*8 * CLAMP (0.f, marker->frac, 1.f) + 0.5f), y + marker->yofs, marker->glyph);
+	}
+
+	M_DrawCharacter (x + (int) ((SLIDER_RANGE-1)*8 * range + 0.5f), y, 131);
+
+	i = x + (SLIDER_RANGE+2)*8;
+	if (i + 5*8 < glcanvas.right)
+		M_Print (i, y, desc);
+}
+
+void M_DrawSlider (int x, int y, float range, const char *desc)
+{
+	M_DrawSliderWithMarkers (x, y, range, NULL, 0, desc);
+}
+
+void M_DrawThresholdSlider (int x, int y, float range, qboolean enabled, float live, const char *desc)
+{
+	slidermarker_t	marker;
+	char			buf[6];
+
+	marker.frac = live;
+	marker.yofs = 0;
+	marker.glyph = 0x8E;
+
+	if (enabled && marker.frac > range)
+	{
+		marker.glyph ^= 0x80;
+		desc = COM_TintString (desc, buf, sizeof (buf));
+	}
+
+	M_DrawSliderWithMarkers (x, y, range, &marker, enabled ? 1 : 0, desc);
 }
 
 void M_DrawCheckbox (int x, int y, int on)
@@ -3903,6 +3986,9 @@ qboolean M_SetSliderValue (int option, float f)
 		f = LERP (MIN_TRIGGER_DEADZONE, MAX_TRIGGER_DEADZONE, f);
 		Cvar_SetValueQuick (&joy_deadzone_trigger, f);
 		return true;
+	case GPAD_OPT_RUMBLE:
+		Cvar_SetValueQuick (&joy_rumble, f);
+		return true;
 	case GPAD_OPT_GYROSENSX:
 		f = LERP (MIN_GYRO_SENS, MAX_GYRO_SENS, f);
 		Cvar_SetValueQuick (&gyro_yawsensitivity, f);
@@ -3965,12 +4051,14 @@ static void M_Options_DrawItem (int y, int item)
 	const char	*str;
 	int			x = OPTIONS_MIDPOS;
 	float		r, l;
+	qboolean	selected;
 
 	if ((unsigned int) item >= countof (options_names))
 		return;
 
 	COM_TintSubstring (options_names[item], optionsmenu.list.search.text, buf, sizeof (buf));
 	M_PrintAligned (x - 28, y, ALIGN_RIGHT, buf);
+	selected = M_Options_GetSelected () == item;
 
 	switch (item)
 	{
@@ -3985,15 +4073,23 @@ static void M_Options_DrawItem (int y, int item)
 	case OPT_SCALE:
 		l = (vid.width / 320.0) - 1;
 		r = l > 0 ? (scr_conscale.value - 1) / l : 0;
-		if (slider_grab && M_Options_GetSelected () == OPT_SCALE)
+		if (slider_grab && selected)
 			r = target_scale_frac;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", scr_conscale.value));
 		break;
 
 	case OPT_HUDLEVEL:
+		if (scr_viewsize.value >= 130.f)
+			str = "Photo";
+		else if (scr_viewsize.value >= 120.f)
+			str = "Off";
+		else if (scr_viewsize.value >= 110.f)
+			str = "Mini";
+		else
+			str = "Full";
 		r = (scr_viewsize.value - 100) / (130 - 100);
 		r = 1 - r;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, str);
 		break;
 
 	case OPT_PIXELASPECT:
@@ -4020,22 +4116,22 @@ static void M_Options_DrawItem (int y, int item)
 
 	case OPT_GAMMA:
 		r = (1.0 - vid_gamma.value) / 0.5;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f", 10.f * r));
 		break;
 
 	case OPT_CONTRAST:
 		r = vid_contrast.value - 1.0;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f", 10.f * r));
 		break;
 	
 	case OPT_MOUSESPEED:
 		r = (sensitivity.value - 1)/10;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", sensitivity.value));
 		break;
 
 	case OPT_SBALPHA:
 		r = (1.0 - scr_sbaralpha.value) ; // scr_sbaralpha range is 1.0 to 0.0
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f%%", 100.0f * r));
 		break;
 
 	case OPT_HUDSTYLE:
@@ -4051,12 +4147,12 @@ static void M_Options_DrawItem (int y, int item)
 
 	case OPT_SNDVOL:
 		r = sfxvolume.value;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f%%", 100.f * sfxvolume.value));
 		break;
 
 	case OPT_MUSICVOL:
 		r = bgmvolume.value;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f%%", 100.f * bgmvolume.value));
 		break;
 
 	case OPT_MUSICEXT:
@@ -4095,12 +4191,12 @@ static void M_Options_DrawItem (int y, int item)
 
 	case OPT_FOV:
 		r = (scr_fov.value - FOV_MIN) / (FOV_MAX - FOV_MIN);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f", scr_fov.value));
 		break;
 
 	case OPT_FOVDISTORT:
 		r = 1.f - cl_gun_fovscale.value;
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f%%", 100.f * r));
 		break;
 
 	//
@@ -4163,6 +4259,13 @@ static void M_Options_DrawItem (int y, int item)
 	case VID_OPT_SOFTEMU:
 		M_Print (x, y, VID_Menu_GetSoftEmuDesc ());
 		break;
+	case VID_OPT_SOFTEMU_MDL:
+		if (r_softemu_mdl_warp.value < 0.f)
+			str = "Auto";
+		else
+			str = r_softemu_mdl_warp.value ? "On" : "Off";
+		M_Print (x, y, str);
+		break;
 	case VID_OPT_FPSLIMIT:
 		M_Print (x, y, host_maxfps.value ? va("%i", (int)host_maxfps.value): "Off");
 		break;
@@ -4181,11 +4284,11 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 	case GPAD_OPT_SENSX:
 		r = (joy_sensitivity_yaw.value - MIN_JOY_SENS) / (MAX_JOY_SENS - MIN_JOY_SENS);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f", joy_sensitivity_yaw.value));
 		break;
 	case GPAD_OPT_SENSY:
 		r = (joy_sensitivity_pitch.value - MIN_JOY_SENS) / (MAX_JOY_SENS - MIN_JOY_SENS);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.0f", joy_sensitivity_pitch.value));
 		break;
 	case GPAD_OPT_INVERT:
 		M_DrawCheckbox (x, y, joy_invert.value);
@@ -4195,29 +4298,42 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 	case GPAD_OPT_EXPONENT_LOOK:
 		r = (joy_exponent.value - MIN_JOY_EXPONENT) / (MAX_JOY_EXPONENT - MIN_JOY_EXPONENT);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", joy_exponent.value));
 		break;
 	case GPAD_OPT_EXPONENT_MOVE:
 		r = (joy_exponent_move.value - MIN_JOY_EXPONENT) / (MAX_JOY_EXPONENT - MIN_JOY_EXPONENT);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", joy_exponent_move.value));
 		break;
 	case GPAD_OPT_DEADZONE_LOOK:
 		r = (joy_deadzone_look.value - MIN_STICK_DEADZONE) / (MAX_STICK_DEADZONE - MIN_STICK_DEADZONE);
-		M_DrawSlider (x, y, r);
+		l = (IN_GetRawLookMagnitude () - MIN_STICK_DEADZONE) / (MAX_STICK_DEADZONE - MIN_STICK_DEADZONE);
+		M_DrawThresholdSlider (x, y, r, selected && IN_HasGamepad (), l, va ("%.0f%%", joy_deadzone_look.value * 100.f));
 		break;
 	case GPAD_OPT_DEADZONE_MOVE:
 		r = (joy_deadzone_move.value - MIN_STICK_DEADZONE) / (MAX_STICK_DEADZONE - MIN_STICK_DEADZONE);
-		M_DrawSlider (x, y, r);
+		l = (IN_GetRawMoveMagnitude () - MIN_STICK_DEADZONE) / (MAX_STICK_DEADZONE - MIN_STICK_DEADZONE);
+		M_DrawThresholdSlider (x, y, r, selected && IN_HasGamepad (), l, va ("%.0f%%", joy_deadzone_move.value * 100.f));
 		break;
 	case GPAD_OPT_DEADZONE_TRIG:
 		r = (joy_deadzone_trigger.value - MIN_TRIGGER_DEADZONE) / (MAX_TRIGGER_DEADZONE - MIN_TRIGGER_DEADZONE);
-		M_DrawSlider (x, y, r);
+		l = (IN_GetRawTriggerMagnitude () - MIN_TRIGGER_DEADZONE) / (MAX_TRIGGER_DEADZONE - MIN_TRIGGER_DEADZONE);
+		M_DrawThresholdSlider (x, y, r, selected && IN_HasGamepad (), l, va ("%.0f%%", joy_deadzone_trigger.value * 100.f));
+		break;
+	case GPAD_OPT_RUMBLE:
+		r = joy_rumble.value;
+		if (!IN_HasRumble ())
+			M_Print (x, y, "Unavailable");
+		else
+			M_DrawSlider (x, y, r, va ("%.0f%%", joy_rumble.value * 100.f));
 		break;
 	case GPAD_OPT_GYROENABLE:
 		if (!IN_HasGyro ())
 			M_Print (x, y, "Unavailable");
 		else
 			M_DrawCheckbox (x, y, gyro_enable.value);
+		break;
+	case GPAD_OPT_FLICKSTICK:
+		M_DrawCheckbox (x, y, joy_flick.value);
 		break;
 	case GPAD_OPT_GYROMODE:
 		switch ((int)gyro_mode.value)
@@ -4233,15 +4349,16 @@ static void M_Options_DrawItem (int y, int item)
 		break;
 	case GPAD_OPT_GYROSENSX:
 		r = (gyro_yawsensitivity.value - MIN_GYRO_SENS) / (MAX_GYRO_SENS - MIN_GYRO_SENS);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", gyro_yawsensitivity.value));
 		break;
 	case GPAD_OPT_GYROSENSY:
 		r = (gyro_pitchsensitivity.value - MIN_GYRO_SENS) / (MAX_GYRO_SENS - MIN_GYRO_SENS);
-		M_DrawSlider (x, y, r);
+		M_DrawSlider (x, y, r, va ("%.1f", gyro_pitchsensitivity.value));
 		break;
 	case GPAD_OPT_GYRONOISE:
 		r = (gyro_noise_thresh.value - MIN_GYRO_NOISE_THRESH) / (MAX_GYRO_NOISE_THRESH - MIN_GYRO_NOISE_THRESH);
-		M_DrawSlider (x, y, r);
+		l = (IN_GetRawGyroMagnitude () - MIN_GYRO_NOISE_THRESH) / (MAX_GYRO_NOISE_THRESH - MIN_GYRO_NOISE_THRESH);
+		M_DrawThresholdSlider (x, y, r, selected && IN_HasGyro () && gyro_enable.value, l, va ("%.1f", gyro_noise_thresh.value));
 		break;
 
 	default:
@@ -4395,13 +4512,11 @@ void M_Options_Key (int k)
 		return;
 
 	case K_LEFTARROW:
-	case K_MWHEELDOWN:
 	//case K_MOUSE2:
 		M_AdjustSliders (-1);
 		break;
 
 	case K_RIGHTARROW:
-	case K_MWHEELUP:
 		M_AdjustSliders (1);
 		break;
 
@@ -4446,49 +4561,70 @@ void M_Options_Mousemove (int cx, int cy)
 //=============================================================================
 /* KEYS MENU */
 
-static const char* const bindnames[][2] =
+typedef struct
 {
-	{"+forward",		"Move forward"},
-	{"+back",			"Move backward"},
-	{"+moveleft",		"Move left"},
-	{"+moveright",		"Move right"},
-	{"+jump",			"Jump / swim up"},
-	{"+moveup",			"Swim up"},
-	{"+movedown",		"Swim down"},
-	{"+speed",			"Run"},
-	{"+strafe",			"Sidestep"},
-	{"",				""},
-	{"+left",			"Turn left"},
-	{"+right",			"Turn right"},
-	{"+lookup",			"Look up"},
-	{"+lookdown",		"Look down"},
-	{"centerview",		"Center view"},
-	{"zoom_in",			"Toggle zoom"},
-	{"+zoom",			"Quick zoom"},
-	{"+gyroaction",		"Gyro switch"},
-	{"",				""},
-	{"+attack",			"Attack"},
-	{"impulse 10",		"Next weapon"},
-	{"impulse 12",		"Previous weapon"},
-	{"impulse 1",		"Axe"},
-	{"impulse 2",		"Shotgun"},
-	{"impulse 3",		"Super Shotgun"},
-	{"impulse 4",		"Nailgun"},
-	{"impulse 5",		"Super Nailgun"},
-	{"impulse 6",		"Grenade Launcher"},
-	{"impulse 7",		"Rocket Launcher"},
-	{"impulse 8",		"Thunderbolt"},
-	{"impulse 225",		"Laser Cannon"},
-	{"impulse 226",		"Mjolnir"},
+	const char			*command;
+	const char			*description;
+	keydevicemask_t		devicemask;
+} menukeybind_t;
+
+#define QUICKSAVE "echo Quicksaving...; wait; save quick"
+#define QUICKLOAD "echo Quickloading...; wait; load quick"
+
+static const menukeybind_t menubinds[] =
+{
+	{"+forward",		"Move forward",			KDM_KEYBOARD_AND_MOUSE},
+	{"+back",			"Move backward",		KDM_KEYBOARD_AND_MOUSE},
+	{"+moveleft",		"Move left",			KDM_KEYBOARD_AND_MOUSE},
+	{"+moveright",		"Move right",			KDM_KEYBOARD_AND_MOUSE},
+	{"+jump",			"Jump / swim up",		KDM_ANY},
+	{"+moveup",			"Swim up",				KDM_ANY},
+	{"+movedown",		"Swim down",			KDM_ANY},
+	{"+speed",			"Run",					KDM_KEYBOARD_AND_MOUSE},
+	{"+strafe",			"Sidestep",				KDM_KEYBOARD_AND_MOUSE},
+	{"",				"",						KDM_ANY},
+	{"+left",			"Turn left",			KDM_KEYBOARD_AND_MOUSE},
+	{"+right",			"Turn right",			KDM_KEYBOARD_AND_MOUSE},
+	{"+lookup",			"Look up",				KDM_KEYBOARD_AND_MOUSE},
+	{"+lookdown",		"Look down",			KDM_KEYBOARD_AND_MOUSE},
+	{"centerview",		"Center view",			KDM_ANY},
+	{"zoom_in",			"Toggle zoom",			KDM_ANY},
+	{"+zoom",			"Quick zoom",			KDM_ANY},
+	{"+gyroaction",		"Gyro switch",			KDM_GAMEPAD},
+	{"",				"",						KDM_ANY},
+	{"+attack",			"Attack",				KDM_ANY},
+	{"impulse 10",		"Next weapon",			KDM_ANY},
+	{"impulse 12",		"Previous weapon",		KDM_ANY},
+	{"impulse 1",		"Axe",					KDM_ANY},
+	{"impulse 2",		"Shotgun",				KDM_ANY},
+	{"impulse 3",		"Super Shotgun",		KDM_ANY},
+	{"impulse 4",		"Nailgun",				KDM_ANY},
+	{"impulse 5",		"Super Nailgun",		KDM_ANY},
+	{"impulse 6",		"Grenade Launcher",		KDM_ANY},
+	{"impulse 7",		"Rocket Launcher",		KDM_ANY},
+	{"impulse 8",		"Thunderbolt",			KDM_ANY},
+	{"impulse 225",		"Laser Cannon",			KDM_ANY},
+	{"impulse 226",		"Mjolnir",				KDM_ANY},
+	{"",				"",						KDM_ANY},
+	{QUICKSAVE,			"Quick save",			KDM_ANY},
+	{QUICKLOAD,			"Quick load",			KDM_ANY},
+	{"menu_load",		"Load menu",			KDM_ANY},
+	{"menu_save",		"Save menu",			KDM_ANY},
+	{"menu_maps",		"Maps menu",			KDM_ANY},
+	{"menu_options",	"Options menu",			KDM_ANY},
+	{"screenshot",		"Screenshot",			KDM_ANY},
 };
 
-#define	NUMCOMMANDS		Q_COUNTOF(bindnames)
-#define KEYLIST_OFS		48
+#define	NUMCOMMANDS		Q_COUNTOF(menubinds)
+#define KEYLIST_TOP		56						// title plaque, tabs, scroll ellipsis bar
+#define KEYLIST_BOTTOM	24						// scroll ellipsis bar, search box, key hint
 
 static struct
 {
 	menulist_t			list;
+	keydevicemask_t		devicemask;
 	int					y;
+	menukeybind_t		*items;
 } keysmenu;
 
 static qboolean	bind_grab;
@@ -4498,37 +4634,68 @@ static void M_Keys_UpdateLayout (void)
 	int height;
 
 	M_UpdateBounds ();
-	height = keysmenu.list.numitems * 8 + KEYLIST_OFS + 12;
+
+	// Note: we use NUMCOMMANDS instead of keysmenu.list.numitems to have a stable layout
+	// when switching between keyboard+mouse/gamepad tabs (different number of items)
+	height = NUMCOMMANDS * 8 + KEYLIST_TOP + KEYLIST_BOTTOM;
 	height = q_min (height, m_height);
 	keysmenu.y = m_top + (((m_height - height) / 2) & ~7);
-	keysmenu.list.viewsize = (height - KEYLIST_OFS - 12) / 8;
+	keysmenu.list.viewsize = (height - KEYLIST_TOP - KEYLIST_BOTTOM) / 8;
 }
 
 static qboolean M_Keys_IsSelectable (int index)
 {
-	return bindnames[index][0][0] != 0;
+	return keysmenu.items[index].command[0] != '\0';
 }
 
 static qboolean M_Keys_Match (int index)
 {
-	const char *name = bindnames[index][1];
+	const char *name = keysmenu.items[index].description;
 	if (!*name)
 		return false;
 	return q_strcasestr (name, keysmenu.list.search.text) != NULL;
 }
 
+static void M_Keys_Populate (void)
+{
+	int i;
+
+	VEC_CLEAR (keysmenu.items);
+
+	for (i = 0; i < NUMCOMMANDS; i++)
+	{
+		// filter item by device type
+		if (!(keysmenu.devicemask & menubinds[i].devicemask))
+			continue;
+
+		if (!hipnotic && (strcmp (menubinds[i].command, "impulse 225") == 0 || strcmp (menubinds[i].command, "impulse 226") == 0))
+			continue;
+
+		// if we have two separators in a row, overwrite the old one
+		if (VEC_SIZE (keysmenu.items) > 0 && !menubinds[i].command[0] && !VEC_LAST(keysmenu.items).command[0])
+			VEC_LAST(keysmenu.items) = menubinds[i];
+		else // otherwise add a new item
+			VEC_PUSH (keysmenu.items, menubinds[i]);
+	}
+
+	keysmenu.list.numitems = (int) VEC_SIZE (keysmenu.items);
+	keysmenu.list.cursor = 0;
+	keysmenu.list.scroll = 0;
+}
+
 void M_Menu_Keys_f (void)
 {
+	keydevice_t lastactive = IN_GetLastActiveDeviceType ();
+
 	IN_DeactivateForMenu();
 	key_dest = key_menu;
 	m_state = m_keys;
 	m_entersound = true;
-	keysmenu.list.cursor = 0;
-	keysmenu.list.scroll = 0;
-	keysmenu.list.numitems = hipnotic ? NUMCOMMANDS : NUMCOMMANDS - 2;
 	keysmenu.list.isactive_fn = M_Keys_IsSelectable;
 	keysmenu.list.search.match_fn = M_Keys_Match;
+	keysmenu.devicemask = (lastactive == KD_GAMEPAD) ? KDM_GAMEPAD : KDM_KEYBOARD_AND_MOUSE;
 
+	M_Keys_Populate ();
 	M_List_ClearSearch (&keysmenu.list);
 
 	M_Keys_UpdateLayout ();
@@ -4537,7 +4704,7 @@ void M_Menu_Keys_f (void)
 
 void M_FindKeysForCommand (const char *command, int *threekeys)
 {
-	Key_GetKeysForCommand (command, threekeys, 3);
+	Key_GetKeysForCommand (command, threekeys, 3, keysmenu.devicemask);
 }
 
 void M_UnbindCommand (const char *command)
@@ -4559,11 +4726,12 @@ extern qpic_t	*pic_up, *pic_down;
 
 void M_Keys_Draw (void)
 {
-	int		firstvis, numvis;
-	int		i, j, x, y, cols;
-	int		keys[3];
+	int			firstvis, numvis;
+	int			i, j, x, y, cols;
+	int			keys[3];
 	const char	*name;
-	qpic_t	*p;
+	const char	*hint;
+	qpic_t		*p;
 
 	M_Keys_UpdateLayout ();
 	M_List_Update (&keysmenu.list);
@@ -4572,20 +4740,17 @@ void M_Keys_Draw (void)
 	y = keysmenu.y;
 	cols = 40;
 
+	// draw title plaque
 	p = Draw_CachePic ("gfx/ttl_cstm.lmp");
 	M_DrawPic ( (320-p->width)/2, y + 4, p);
 
-	if (bind_grab)
-		M_Print (12, y + 32, "Press a key or button for this action");
-	else
-	{
-		const char *msg = IN_HasGamepad () ?
-			"Enter/A to change, backspace/Y to clear" :
-			"Enter to change, backspace to clear";
-		M_PrintAligned (160, y + 32, ALIGN_CENTER, msg);
-	}
+	// draw tabs
+	M_PrintAlignedEx (320*1/4, y + 32, ALIGN_CENTER, 8, keysmenu.devicemask == KDM_GAMEPAD, "Keyboard & Mouse");
+	M_PrintAlignedEx (320*3/4, y + 32, ALIGN_CENTER, 8, keysmenu.devicemask != KDM_GAMEPAD, "Gamepad");
+	i = keysmenu.devicemask == KDM_GAMEPAD ? 3 : 1;
+	M_DrawQuakeBar (320*i/4 - 20*4, y + 40, 20);
 
-	y += KEYLIST_OFS;
+	y += KEYLIST_TOP;
 
 	if (M_List_GetOverflow (&keysmenu.list) > 0)
 	{
@@ -4601,17 +4766,17 @@ void M_Keys_Draw (void)
 	{
 		i = firstvis++;
 
-		if (bindnames[i][0][0])
+		if (keysmenu.items[i].command[0])
 		{
 			char buf[64];
 			qboolean active = (i == keysmenu.list.cursor && bind_grab);
 			void (*print_fn) (int cx, int cy, const char *text) =
 				active ? M_PrintWhite : M_Print;
 
-			COM_TintSubstring (bindnames[i][1], keysmenu.list.search.text, buf, sizeof (buf));
+			COM_TintSubstring (keysmenu.items[i].description, keysmenu.list.search.text, buf, sizeof (buf));
 			M_PrintDotFill (0, y, buf, 17, !active);
 
-			M_FindKeysForCommand (bindnames[i][0], keys);
+			M_FindKeysForCommand (keysmenu.items[i].command, keys);
 			// If we already have 3 keys bound to this action
 			// they will all be unbound when a new one is assigned.
 			// We show this outcome to the user before it actually
@@ -4624,16 +4789,23 @@ void M_Keys_Draw (void)
 			{
 				if (j)
 				{
-					print_fn (x + 8, y, "or");
-					x += 32;
+					GL_SetCanvasColor (1.f, 1.f, 1.f, 0.375f);
+					print_fn (x, y, ",");
+					GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+					x += 16;
 				}
-				name = Key_KeynumToString (keys[j]);
+				name = Key_KeynumToFriendlyString (keys[j]);
 				print_fn (x, y, name);
 				x += strlen (name) * 8;
 			}
 
 			if (j == 0)
+			{
+				if (!active)
+					GL_SetCanvasColor (1.f, 1.f, 1.f, 0.375f);
 				print_fn (x, y, "???");
+				GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+			}
 		}
 
 		if (i == keysmenu.list.cursor)
@@ -4646,7 +4818,20 @@ void M_Keys_Draw (void)
 
 		y += 8;
 	}
+
+	// draw search box
 	M_List_DrawSearch (&keysmenu.list, 0, y + 4, 16);
+
+	// show hint at the bottom
+	if (bind_grab)
+		hint = keysmenu.devicemask == KDM_GAMEPAD ?
+			va ("Press new button, or %s to cancel", Key_KeynumToFriendlyString (K_START)) :
+			va ("Press new key, or %s to cancel", Key_KeynumToFriendlyString (K_ESCAPE)) ;
+	else
+		hint = IN_GetLastActiveDeviceType () == KD_GAMEPAD ?
+			va ("%s = change, %s = clear", Key_KeynumToFriendlyString (K_ABUTTON), Key_KeynumToFriendlyString (K_YBUTTON)):
+			va ("%s = change, %s = clear", Key_KeynumToFriendlyString (K_ENTER), Key_KeynumToFriendlyString (K_BACKSPACE));
+	M_PrintAligned (160, y + 16, ALIGN_CENTER, hint);
 }
 
 
@@ -4655,15 +4840,23 @@ void M_Keys_Key (int k)
 	char	cmd[80];
 	int		keys[3];
 
-	if (bind_grab)
-	{	// defining a key
+	if (bind_grab) // defining a key
+	{
 		M_ThrottledSound ("misc/menu1.wav");
+
 		if ((k != K_ESCAPE) && (k != '`'))
 		{
-			M_FindKeysForCommand (bindnames[keysmenu.list.cursor][0], keys);
+			const char *command;
+
+			// wrong key type?
+			if (!(Key_GetDeviceMaskForKeynum (k) & keysmenu.devicemask))
+				return;
+
+			command = keysmenu.items[keysmenu.list.cursor].command;
+			M_FindKeysForCommand (command, keys);
 			if (keys[2] != -1)
-				M_UnbindCommand (bindnames[keysmenu.list.cursor][0]);
-			sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), bindnames[keysmenu.list.cursor][0]);
+				M_UnbindCommand (command);
+			sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), command);
 			Cbuf_InsertText (cmd);
 		}
 
@@ -4684,6 +4877,14 @@ void M_Keys_Key (int k)
 		M_Menu_Options_f ();
 		break;
 
+	case K_TAB:
+	case K_LSHOULDER:
+	case K_RSHOULDER:
+		M_ThrottledSound ("misc/menu1.wav");
+		keysmenu.devicemask ^= KDM_GAMEPAD | KDM_KEYBOARD_AND_MOUSE;
+		M_Keys_Populate ();
+		break;
+
 	case K_ENTER:		// go into bind mode
 	case K_KP_ENTER:
 	case K_ABUTTON:
@@ -4702,7 +4903,7 @@ void M_Keys_Key (int k)
 	case K_DEL:
 	case K_YBUTTON:
 		M_ThrottledSound ("misc/menu2.wav");
-		M_UnbindCommand (bindnames[keysmenu.list.cursor][0]);
+		M_UnbindCommand (keysmenu.items[keysmenu.list.cursor].command);
 		break;
 	}
 }
@@ -4710,7 +4911,7 @@ void M_Keys_Key (int k)
 
 void M_Keys_Mousemove (int cx, int cy)
 {
-	M_List_Mousemove (&keysmenu.list, cy - keysmenu.y - KEYLIST_OFS);
+	M_List_Mousemove (&keysmenu.list, cy - keysmenu.y - KEYLIST_TOP);
 }
 
 textmode_t M_Keys_TextEntry (void)
@@ -5597,7 +5798,6 @@ void M_GameOptions_Key (int key)
 		break;
 
 	case K_LEFTARROW:
-	case K_MWHEELDOWN:
 	//case K_MOUSE2:
 		if (gameoptions_cursor == 0)
 			break;
@@ -5606,7 +5806,6 @@ void M_GameOptions_Key (int key)
 		break;
 
 	case K_RIGHTARROW:
-	case K_MWHEELUP:
 		if (gameoptions_cursor == 0)
 			break;
 		M_ThrottledSound ("misc/menu3.wav");
@@ -6171,7 +6370,12 @@ void M_Mods_Key (int key)
 	case K_MOUSE2:
 		M_List_ClearSearch (&modsmenu.list);
 		m_state = modsmenu.prev;
-		m_entersound = true;
+		if (m_state == m_none)
+		{
+			IN_Activate ();
+			key_dest = key_game;
+		}
+		M_ThrottledSound ("misc/menu2.wav");
 		break;
 
 	case K_ENTER:
@@ -6921,7 +7125,7 @@ textmode_t M_TextEntry (void)
 }
 
 
-qboolean M_KeyBinding (void)
+qboolean M_WaitingForKeyBinding (void)
 {
 	return key_dest == key_menu && m_state == m_keys && bind_grab;
 }

@@ -3,7 +3,7 @@
   ______________________________________________________________________
 
 
-  Page last edited: September 2023.
+  Page last edited: July 2024.
 
 
   1. About
@@ -220,6 +220,56 @@
 
 
   5. Changes
+
+  Changes in 0.96.3:
+
+  -  Fix potential infinite loop when playing sounds with loop start >=
+     end (e.g. misc/forcefield.wav from Madfox's kaptlog.zip)
+
+  -  Fix possible overflow when resampling very big sounds (e.g.
+     gram1.wav from the 'A day like no other' mod.)
+
+  -  Change Sky_ClipPoly to allocate on the heap in if MAX_CLIP_VERTS
+     limit is reached (e.g. with lim_daviddg from Liminal Spaces Jam)
+
+  -  Minor code cleanups. Updates to third party code.
+
+  -  Thanks to Andrei Drexler, Vincent Sonnier, Alexey Lysiuk, and
+     Jaycie Ewald for patches.
+
+
+  Changes in 0.96.2:
+
+  -  Fix stack buffer overrun Mod_PolyForUnlitSurface: fixes crash when
+     loading lim_daviddg.bsp from Liminal Spaces Jam.
+
+  -  Fix potential buffer overflow in progs global string functions.
+
+  -  Fix potential buffer overflow in Mod_LoadAliasFrame()
+
+  -  Optimize BoxOnPlaneSide()
+
+  -  Reserve enough space in PF_makestatic() for worst case scenarios.
+
+  -  Improve handling of huge entities in SV_FindTouchedLeafs()
+
+  -  Warn about bad maps with only 1 or 2 edges per face (e.g.: mj4m?,
+     alk_dancing, ej3_bizz, rotj_entsoy...)
+
+  -  Apply FOV gun scaling for r_showtris
+
+  -  Sliders with visible values in options menu.
+
+  -  game command now refuses setting a non-existing game directory
+
+  -  Fix build in C23 mode.
+
+  -  Minor code cleanups. Updated third party code, e.g. SDL, music
+     codecs, etc.
+
+  -  Thanks to Andrei Drexler, Alexey Lysiuk, Diordany van Hemert, and
+     Jaime Moreira for patches.
+
 
   Changes in 0.96.1:
 

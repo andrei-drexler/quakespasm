@@ -109,8 +109,6 @@ typedef struct
 //
 // refresh
 //
-extern	int		reinit_surfcache;
-
 
 extern	refdef_t	r_refdef;
 extern vec3_t	r_origin, vpn, vright, vup;
@@ -137,13 +135,5 @@ void R_LavaSplash (vec3_t org);
 void R_TeleportSplash (vec3_t org);
 
 void R_PushDlights (void);
-
-
-//
-// surface cache related
-//
-extern	int		reinit_surfcache;	// if 1, surface cache is currently empty and
-
-void D_FlushCaches (void);
 
 #endif	/* _QUAKE_RENDER_H */

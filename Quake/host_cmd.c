@@ -77,6 +77,8 @@ static filelist_item_t *FileList_AddWithData (const char *name, const void *data
 	}
 
 	item = (filelist_item_t *) malloc (sizeof(filelist_item_t) + datasize);
+	if (!item)
+		Sys_Error ("FileList_AddWithData: out of memory on %" SDL_PRIu64 " bytes (%s)", (uint64_t)(sizeof(filelist_item_t) + datasize), name);
 	q_strlcpy (item->name, name, sizeof(item->name));
 	if (datasize)
 	{
@@ -179,7 +181,7 @@ static void FileList_Print (filelist_item_t *list, const char *types[2], const c
 	filelist_item_t	*item;
 	const char		*desc;
 	char			buf[256], buf2[256];
-	char			padchar = '.' | 0x80;
+	char			padchar = QCHAR_COLORED ('.');
 	size_t			ofsdesc = list == extralevels ? maxlevelnamelen + 2 : 0;
 
 	if (substr && *substr)
@@ -752,7 +754,7 @@ static void Modlist_RegisterAddons (void *param)
 
 	for (entry = addons->firstchild; entry; entry = entry->next)
 	{
-		const char		*download, *gamedir, *name, *author, *date, *description, *version;
+		const char		*download, *gamedir, *name, *author, *date, *description;
 		const double	*size;
 		modinfo_t		*info;
 		filelist_item_t	*item;
@@ -768,7 +770,6 @@ static void Modlist_RegisterAddons (void *param)
 		name		= JSON_FindString (entry, "name");
 		author		= JSON_FindString (entry, "author");
 		date		= JSON_FindString (entry, "date");
-		version		= JSON_FindString (entry, "version");
 		size		= JSON_FindNumber (entry, "size");
 		description	= JSON_FindString (JSON_Find (entry, "description", JSON_OBJECT), "en");
 
@@ -2654,8 +2655,10 @@ static void Host_Loadgame_f (void)
 	}
 
 	// Free edicts allocated during map loading but no longer used after restoring saved game state
+	// Note: we use ED_ClearEdict instead of ED_Free to avoid placing entities >= num_edicts in the free list
+	// This is different from QuakeSpasm, which doesn't use a free list
 	for (i = entnum; i < qcvm->num_edicts; i++)
-		ED_Free (EDICT_NUM (i));
+		ED_ClearEdict (EDICT_NUM (i));
 
 	qcvm->num_edicts = entnum;
 	qcvm->time = time;

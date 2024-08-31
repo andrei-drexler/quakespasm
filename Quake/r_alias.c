@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 
 extern cvar_t gl_overbright_models, gl_fullbrights, r_lerpmodels, r_lerpmove; //johnfitz
-extern cvar_t scr_fov, cl_gun_fovscale;
+extern cvar_t scr_fov, cl_gun_fovscale, cl_gun_x, cl_gun_y, cl_gun_z;
 extern cvar_t r_oit;
 
 //up to 16 color translated skins
@@ -71,6 +71,8 @@ struct ibuf_s {
 		vec3_t	eyepos;
 		float	_pad;
 		vec4_t	fog;
+		float	dither;
+		float	_padding[3];
 	} global;
 	aliasinstance_t inst[MAX_ALIAS_INSTANCES];
 } ibuf;
@@ -292,10 +294,11 @@ R_FlushAliasInstances
 */
 void R_FlushAliasInstances (void)
 {
+	extern cvar_t r_softemu_mdl_warp;
 	qmodel_t	*model;
 	aliashdr_t	*paliashdr;
 	qboolean	alphatest, translucent, oit, md5;
-	GLuint		program;
+	int			mode;
 	unsigned	state;
 	GLuint		buf;
 	GLbyte		*ofs;
@@ -320,16 +323,16 @@ void R_FlushAliasInstances (void)
 	switch (softemu)
 	{
 	case SOFTEMU_BANDED:
-		program = glprogs.alias[oit][ALIASSHADER_NOPERSP][alphatest][md5];
+		mode = r_softemu_mdl_warp.value != 0.f ? ALIASSHADER_NOPERSP : ALIASSHADER_STANDARD;
 		break;
 	case SOFTEMU_COARSE:
-		program = glprogs.alias[oit][ALIASSHADER_DITHER][alphatest][md5];
+		mode = r_softemu_mdl_warp.value > 0.f ? ALIASSHADER_NOPERSP : ALIASSHADER_DITHER;
 		break;
 	default:
-		program = glprogs.alias[oit][ALIASSHADER_STANDARD][alphatest][md5];
+		mode = r_softemu_mdl_warp.value > 0.f ? ALIASSHADER_NOPERSP : ALIASSHADER_STANDARD;
 		break;
 	}
-	GL_UseProgram (program);
+	GL_UseProgram (glprogs.alias[oit][mode][alphatest][md5]);
 
 	if (md5)
 		state = GLS_CULL_BACK | GLS_ATTRIBS(5);
@@ -351,6 +354,7 @@ void R_FlushAliasInstances (void)
 			-fabs (r_framedata.fogdata[3]) :
 			 fabs (r_framedata.fogdata[3])
 	;
+	ibuf.global.dither = r_framedata.screendither;
 
 	ibuf_size = sizeof(ibuf.global) + sizeof(ibuf.inst[0]) * ibuf.count;
 	GL_Upload (GL_SHADER_STORAGE_BUFFER, &ibuf.global, ibuf_size, &buf, &ofs);
@@ -424,6 +428,22 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 		lerpdata.blend = 0.f;
 
 	//
+	// viewmodel adjustments (position, fov distortion correction)
+	//
+	if (e == &cl.viewent)
+	{
+		if (r_refdef.basefov > 90.f && cl_gun_fovscale.value)
+		{
+			fovscale = tan (r_refdef.basefov * (0.5f * M_PI / 180.f));
+			fovscale = 1.f + (fovscale - 1.f) * cl_gun_fovscale.value;
+		}
+
+		VectorMA (lerpdata.origin, cl_gun_x.value * paliashdr->scale[0] * fovscale,	vright,	lerpdata.origin);
+		VectorMA (lerpdata.origin, cl_gun_y.value * paliashdr->scale[1] * fovscale,	vup,	lerpdata.origin);
+		VectorMA (lerpdata.origin, cl_gun_z.value * paliashdr->scale[2],			vpn,	lerpdata.origin);
+	}
+
+	//
 	// cull it
 	//
 	if (R_CullModelForEntity(e))
@@ -432,12 +452,6 @@ static void R_DrawAliasModel_Real (entity_t *e, qboolean showtris)
 	//
 	// transform it
 	//
-	if (e == &cl.viewent && r_refdef.basefov > 90.f && cl_gun_fovscale.value)
-	{
-		fovscale = tan(r_refdef.basefov * (0.5f * M_PI / 180.f));
-		fovscale = 1.f + (fovscale - 1.f) * cl_gun_fovscale.value;
-	}
-
 	R_EntityMatrix (model_matrix, lerpdata.origin, lerpdata.angles, e->scale);
 	ApplyTranslation (model_matrix, paliashdr->scale_origin[0], paliashdr->scale_origin[1] * fovscale, paliashdr->scale_origin[2] * fovscale);
 	ApplyScale (model_matrix, paliashdr->scale[0], paliashdr->scale[1] * fovscale, paliashdr->scale[2] * fovscale);

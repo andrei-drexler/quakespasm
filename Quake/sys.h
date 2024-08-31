@@ -64,7 +64,7 @@ qboolean Sys_Explore (const char *path);
 // file IO
 //
 
-typedef long long qfileofs_t;
+typedef int64_t qfileofs_t;
 
 // returns the file size or -1 if file is not present.
 // the file should be in BINARY mode for stupid OSs that care
@@ -106,11 +106,23 @@ int Sys_FileType (const char *path);
 /* returns an FS entity type, i.e. FS_ENT_FILE or FS_ENT_DIRECTORY.
  * returns FS_ENT_NONE (0) if no such file or directory is present. */
 
+qboolean Sys_IsDebuggerPresent (void);
+
 //
 // system IO
 //
 FUNC_NORETURN void Sys_Quit (void);
-FUNC_NORETURN void Sys_Error (const char *error, ...) FUNC_PRINTF(1,2);
+FUNC_NORETURN void Sys_ReportError (const char *error, ...) FUNC_PRINTF(1,2);
+
+#define Sys_Error(...)									\
+	do													\
+	{													\
+		if (Sys_IsDebuggerPresent ())					\
+			SDL_TriggerBreakpoint ();					\
+		Sys_ReportError (__VA_ARGS__);					\
+	} while (0)											\
+
+
 // an error will cause the entire program to exit
 #ifdef __WATCOMC__
 #pragma aux Sys_Error aborts;

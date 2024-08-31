@@ -4,7 +4,7 @@ diff --git a/Quake/gl_model.c b/Quake/gl_model.c
 index 239d361..80948f1 100644
 --- a/Quake/gl_model.c
 +++ b/Quake/gl_model.c
-@@ -39,6 +39,8 @@ static void Mod_Print (void);
+@@ -39,6 +39,8 @@
  static cvar_t	external_ents = {"external_ents", "1", CVAR_ARCHIVE};
  static cvar_t	external_vis = {"external_vis", "1", CVAR_ARCHIVE};
  
@@ -82,7 +82,7 @@ diff --git a/Quake/gl_rmain.c b/Quake/gl_rmain.c
 index 6883161..4a8a745 100644
 --- a/Quake/gl_rmain.c
 +++ b/Quake/gl_rmain.c
-@@ -100,6 +100,8 @@ cvar_t	r_noshadow_list = {"r_noshadow_list", "progs/flame2.mdl,progs/flame.mdl,p
+@@ -100,6 +100,8 @@
  extern cvar_t	r_vfog;
  //johnfitz
  
@@ -92,10 +92,10 @@ index 6883161..4a8a745 100644
  
  cvar_t	r_lavaalpha = {"r_lavaalpha","0",CVAR_NONE};
 diff --git a/Quake/gl_rmisc.c b/Quake/gl_rmisc.c
-index 93791f6..4006c5d 100644
+index 963d55e..e9b251b 100644
 --- a/Quake/gl_rmisc.c
 +++ b/Quake/gl_rmisc.c
-@@ -47,6 +47,7 @@ extern cvar_t r_nolerp_list;
+@@ -47,6 +47,7 @@
  extern cvar_t r_noshadow_list;
  //johnfitz
  extern cvar_t gl_zfix; // QuakeSpasm z-fighting fix
@@ -103,7 +103,7 @@ index 93791f6..4006c5d 100644
  
  extern gltexture_t *playertextures[MAX_SCOREBOARD]; //johnfitz
  
-@@ -231,6 +232,7 @@ void R_Init (void)
+@@ -230,6 +231,7 @@ void R_Init (void)
  	Cvar_SetCallback (&r_lavaalpha, R_SetLavaalpha_f);
  	Cvar_SetCallback (&r_telealpha, R_SetTelealpha_f);
  	Cvar_SetCallback (&r_slimealpha, R_SetSlimealpha_f);

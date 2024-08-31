@@ -165,12 +165,12 @@ void Host_EndGame (const char *message, ...)
 
 /*
 ================
-Host_Error
+Host_ReportError
 
 This shuts down both the client and server
 ================
 */
-void Host_Error (const char *error, ...)
+void Host_ReportError (const char *error, ...)
 {
 	va_list		argptr;
 	char		string[1024];
@@ -257,10 +257,18 @@ void	Host_FindMaxClients (void)
 
 void Host_Version_f (void)
 {
-	Con_Printf ("Quake Version %1.2f\n", VERSION);
-	Con_Printf ("QuakeSpasm Version " QUAKESPASM_VER_STRING "\n");
-	Con_Printf ("Ironwail Version " IRONWAIL_VER_STRING "\n");
-	Con_Printf ("Exe: " __TIME__ " " __DATE__ " (%s %d-bit)\n", SDL_GetPlatform (), (int)sizeof(void*)*8);
+	SDL_version sdl_linked;
+	SDL_GetVersion (&sdl_linked);
+
+	Con_Printf ("\n");
+	Con_Printf ("Quake      %1.2f\n", VERSION);
+	Con_Printf ("QuakeSpasm " QUAKESPASM_VER_STRING "\n");
+	Con_Printf ("Ironwail   " IRONWAIL_VER_STRING "\n");
+	Con_Printf ("Exe        " __TIME__ " " __DATE__ "\n");
+	Con_Printf ("SDL        " Q_SDL_COMPILED_VERSION_STRING " (compiled)\n");
+	Con_Printf ("           %d.%d.%d (linked)\n", sdl_linked.major, sdl_linked.minor, sdl_linked.patch);
+	Con_Printf ("OS         %s %d-bit\n", SDL_GetPlatform (), (int)sizeof(void*)*8);
+	Con_Printf ("\n");
 }
 
 /* cvar callback functions : */
@@ -624,7 +632,6 @@ void Host_ClearMemory (void)
 	}
 
 	Con_DPrintf ("Clearing memory\n");
-	D_FlushCaches ();
 	Mod_ClearAll ();
 	Sky_ClearAll();
 	PR_ClearProgs(&sv.qcvm);
@@ -1015,15 +1022,18 @@ static void UpdateWindowTitle (void)
 
 	if (current.map[0])
 	{
-		char levelname[4 * sizeof (cl.levelname)];
+		char cleanname[sizeof (cl.levelname)];
+		char utf8name[4 * sizeof (cl.levelname)];
 		char title[1024];
 
-		UTF8_FromQuake (levelname, sizeof (levelname), cl.levelname);
+		Mod_SanitizeMapDescription (cleanname, sizeof (cleanname), cl.levelname);
+
+		UTF8_FromQuake (utf8name, sizeof (utf8name), cleanname);
 		q_snprintf (title, sizeof (title),
-			levelname[0] ?
+			utf8name[0] ?
 				"%s (%s)  |  skill %d  |  %d/%d kills  |  %d/%d secrets  -  " WINDOW_TITLE_STRING :
 				"%s%s  |  skill %d  |  %d/%d kills  |  %d/%d secrets  -  " WINDOW_TITLE_STRING,
-			levelname, current.map,
+			utf8name, current.map,
 			current.stats.skill,
 			current.stats.monsters, current.stats.total_monsters,
 			current.stats.secrets, current.stats.total_secrets

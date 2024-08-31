@@ -131,12 +131,6 @@ typedef unsigned int uintptr_t;
 #define HAVE_STDDEF_H	1
 #endif
 
-/* Windows CE can support only _strdup() */
-#if defined(_WIN32_WCE) && defined(HAVE_STRDUP)
-#undef strdup
-#define strdup	_strdup
-#endif
-
 /* Enable various audio drivers */
 #ifndef _WIN32_WCE
 #define SDL_AUDIO_DRIVER_DSOUND	1

@@ -371,7 +371,7 @@ qpic_t	*Draw_TryCachePic (const char *path, unsigned int texflags)
 //
 // load the pic from disk
 //
-	dat = (qpic_t *)COM_LoadTempFile (path, NULL);
+	dat = (qpic_t *)COM_LoadMallocFile (path, NULL);
 	if (!dat)
 		return NULL;
 	SwapPic (dat);
@@ -404,6 +404,7 @@ qpic_t	*Draw_TryCachePic (const char *path, unsigned int texflags)
 		gl.th = (float)dat->height/(float)TexMgr_PadConditional(dat->height); //johnfitz
 	}
 
+	free (dat);
 	memcpy (pic->pic.data, &gl, sizeof(glpic_t));
 
 	return &pic->pic;
@@ -950,13 +951,31 @@ Draw_FadeScreen -- johnfitz -- revised
 void Draw_FadeScreen (void)
 {
 	guivertex_t *verts;
+	int type;
 	float smax = 0.f, tmax = 0.f, s;
 
 	if (scr_menubgalpha.value <= 0.f)
 		return;
 
+	if (scr_menubgstyle.value < 0.f)
+	{
+		if (softemu >= SOFTEMU_BANDED)
+			type = MENUBG_DOSQUAKE;
+		else if (softemu == SOFTEMU_COARSE)
+			type = MENUBG_WINQUAKE_SCALED;
+		else if (softemu == SOFTEMU_FINE)
+			type = MENUBG_WINQUAKE;
+		else
+			type = MENUBG_GLQUAKE;
+	}
+	else
+	{
+		type = (int)scr_menubgstyle.value;
+		type = CLAMP (0, type, MENUBG_NUMTYPES - 1);
+	}
+
 	GL_SetCanvas (CANVAS_DEFAULT);
-	if (softemu >= SOFTEMU_BANDED)
+	if (type == MENUBG_DOSQUAKE)
 	{
 		float clr[3];
 		Draw_SetTexture (whitetexture);
@@ -978,11 +997,16 @@ void Draw_FadeScreen (void)
 		s = (sqrt (s) + s) * 0.5f;	// ~0.6 with scr_menubgalpha 0.5
 		GL_SetCanvasColor (0.095f, 0.08f, 0.045f, s);
 	}
-	else if (softemu == SOFTEMU_COARSE)
+	else if (type == MENUBG_WINQUAKE || type == MENUBG_WINQUAKE_SCALED)
 	{
-		s = q_min ((float)vid.guiwidth / 320.0f, (float)vid.guiheight / 200.0f);
-		s = CLAMP (1.0f, scr_menuscale.value, s);
-		s = floor (s);
+		if (type == MENUBG_WINQUAKE_SCALED)
+		{
+			s = q_min ((float)vid.guiwidth / 320.0f, (float)vid.guiheight / 200.0f);
+			s = CLAMP (1.0f, scr_menuscale.value, s);
+			s = floor (s);
+		}
+		else
+			s = 1.f;
 		smax = glwidth / (winquakemenubg->width * s);
 		tmax = glheight / (winquakemenubg->height * s);
 		Draw_SetTexture (winquakemenubg);
@@ -999,7 +1023,7 @@ void Draw_FadeScreen (void)
 			GL_SetCanvasColor (0.f, 0.f, 0.f, s);
 		}
 	}
-	else
+	else // MENUBG_GLQUAKE
 	{
 		Draw_SetTexture (whitetexture);
 		Draw_SetBlending (GLS_BLEND_ALPHA);

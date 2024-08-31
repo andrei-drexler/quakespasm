@@ -85,8 +85,19 @@ typedef struct glcanvas_s {
 
 extern	glcanvas_t	glcanvas;
 
+typedef enum menubg_t
+{
+	MENUBG_GLQUAKE,
+	MENUBG_WINQUAKE,
+	MENUBG_WINQUAKE_SCALED,
+	MENUBG_DOSQUAKE,
+
+	MENUBG_NUMTYPES,
+} menubgstyle_t;
+
 extern	cvar_t		scr_menuscale;
 extern	cvar_t		scr_menubgalpha;
+extern	cvar_t		scr_menubgstyle;
 extern	cvar_t		scr_sbarscale;
 extern	cvar_t		scr_conwidth;
 extern	cvar_t		scr_conscale;

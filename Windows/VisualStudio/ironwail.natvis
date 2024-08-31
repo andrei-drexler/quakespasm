@@ -18,6 +18,18 @@
 
 	<!--
 	================================================================================================================================
+	QuakeC statement
+	================================================================================================================================
+	-->
+	<Type Name="statement_s">
+		<DisplayString Condition="op == OP_IF || op == OP_IFNOT">{pr_opnames[op],sb} {a} {b}</DisplayString>
+		<DisplayString Condition="op == OP_GOTO">{pr_opnames[op],sb} {a}</DisplayString>
+		<DisplayString Condition="(unsigned int)(op - OP_STORE_F) &lt; 6">{pr_opnames[op],sb} {a} {b}</DisplayString>
+		<DisplayString>{pr_opnames[op],sb} {a} {b} {c}</DisplayString>
+	</Type>
+
+	<!--
+	================================================================================================================================
 	QuakeC function
 	================================================================================================================================
 	-->
@@ -32,6 +44,8 @@
 
 		<Intrinsic Name="IsValidBuiltin" Expression="IsBuiltin() &amp;&amp; -first_statement &lt; qcvm-&gt;numbuiltins"/>
 
+		<!--Inline view - name only-->
+		<DisplayString IncludeView="nameonly">{PR_GetString(s_name),sb}</DisplayString>
 		<!--Inline view - builtin-->
 		<DisplayString Condition="IsValidBuiltin()">#{-first_statement} {PR_GetString(s_name),sb} ({qcvm-&gt;builtins[-first_statement],na})</DisplayString>
 		<DisplayString Condition="IsBuiltin()">#{-first_statement} {PR_GetString(s_name),sb} (INVALID)</DisplayString>
@@ -89,7 +103,7 @@
 			<Item Name="name">PR_GetString(s_name),sb</Item>
 			<Item Name="type">Type(),en</Item>
 			<Item Name="saved">IsSaved()</Item>
-			<Item Name="offset">ofs*4</Item>
+			<Item Name="offset">ofs</Item>
 		</Expand>
 	</Type>
 
@@ -134,15 +148,15 @@
 			<Parameter Name="num" Type="int"/>
 		</Intrinsic>
 
-		<Intrinsic Name="IsValidField" Expression="num &gt;= 1 &amp;&amp; num &lt; qcvm-&gt;progs-&gt;numfielddefs">
-			<Parameter Name="num" Type="int"/>
-		</Intrinsic>
-
 		<Intrinsic Name="FieldName" Expression="PR_GetString(qcvm-&gt;fielddefs[num].s_name)">
 			<Parameter Name="num" Type="int"/>
 		</Intrinsic>
 
-		<Intrinsic Name="SafeFieldPtr" Expression="IsValidField(num) ? qcvm-&gt;fielddefs + num : 0">
+		<Intrinsic Name="IsValidFieldOffset" Expression="num &gt;= 0 &amp;&amp; num &lt;= qcvm-&gt;maxfieldofs &amp;&amp; qcvm-&gt;ofstofield[num] != -1">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="GetFieldAtOffset" Expression="IsValidFieldOffset(num) ? qcvm-&gt;fielddefs + qcvm-&gt;ofstofield[num] : 0">
 			<Parameter Name="num" Type="int"/>
 		</Intrinsic>
 
@@ -302,7 +316,7 @@
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_string">PR_GetString(*(int*)FieldData(i)),s</Item>
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_entity">PROG_TO_EDICT(*(int*)FieldData(i)),na</Item>
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_function">GetFunction(*(int*)FieldData(i)),na</Item>
-							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_field">SafeFieldPtr(*(int*)FieldData(i)),na</Item>
+							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_field">GetFieldAtOffset(*(int*)FieldData(i)),na</Item>
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_float &amp;&amp; !IsVecField(i)">*(float*)FieldData(i),g</Item>
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_vector">*(float3_t*)FieldData(i),g</Item>
 							<Item Name="{FieldName(i),sb}" Condition="FieldType(i)==ev_pointer">(void*)FieldData(i)</Item>
@@ -310,6 +324,185 @@
 							<Exec>i++</Exec>
 						</Loop>
 					</CustomListItems>
+				</Expand>
+			</Synthetic>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	QuakeC VM stack entry
+	================================================================================================================================
+	-->
+	<Type Name="prstack_t">
+		<DisplayString IncludeView="full">{*f} @{s - f-&gt;first_statement}</DisplayString>
+		<DisplayString>{*f,view(nameonly)}</DisplayString>
+		<Expand>
+			<Item Name="function">f,na</Item>
+			<Item Name="offset">s - f-&gt;first_statement</Item>
+			<Item Name="statement">qcvm-&gt;statements[s]</Item>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	QuakeC VM
+	================================================================================================================================
+	-->
+	<Type Name="qcvm_s">
+		<Intrinsic Name="PR_GetString" Expression="((unsigned int)num &lt; stringssize) ? strings + num :
+					(num &lt; 0 &amp;&amp; num &gt;= -numknownstrings) ? knownstrings[-1 - num] : 0" ReturnType="const char*">
+			<Parameter Name="num" Type="int" />
+		</Intrinsic>
+
+		<Intrinsic Name="GlobalName" Expression="PR_GetString(globaldefs[num].s_name)">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsValidProgEnt" Expression="(uintptr_t)ofs &lt;= (uintptr_t)((num_edicts-1)*edict_size)" ReturnType="bool">
+			<Parameter Name="ofs" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="PROG_TO_EDICT" Expression="IsValidProgEnt(ofs) ? (edict_s*)((char*)edicts + ofs) : 0" ReturnType="edict_s*">
+			<Parameter Name="ofs" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="GlobalType" Expression="(etype_t)(globaldefs[num].type &amp; 0x7FFF)">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsVecGlobal" Expression="	num &gt;= 1 &amp;&amp; GlobalType(num - 1) == ev_vector ||
+													num &gt;= 2 &amp;&amp; GlobalType(num - 2) == ev_vector ||
+													num &gt;= 3 &amp;&amp; GlobalType(num - 3) == ev_vector">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="GlobalData" Expression="(eval_t *)&amp;globals[globaldefs[num].ofs]">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="IsValidFieldOffset" Expression="num &gt;= 0 &amp;&amp; num &lt;= maxfieldofs &amp;&amp; ofstofield[num] != -1">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="GetFieldAtOffset" Expression="IsValidFieldOffset(num) ? &amp;fielddefs[ofstofield[num]] : 0">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="MiB" Expression="(num*10 + 512*1024) / (1024*1024) / 10.0">
+			<Parameter Name="num" Type="int"/>
+		</Intrinsic>
+
+		<Intrinsic Name="CurrentFunction" Expression="xfunction ? PR_GetString(xfunction->s_name) : 0"/>
+
+		<!--Inline view-->
+		<DisplayString Condition="this == &amp;sv.qcvm">[sv.qcvm: {CurrentFunction(),sb} | {num_edicts} / {max_edicts} edicts | {MiB(edict_size*num_edicts),g} / {MiB(edict_size*max_edicts),g} MiB]</DisplayString>
+		<DisplayString Condition="this == &amp;cl.qcvm">[cl.qcvm: {CurrentFunction(),sb} | {num_edicts} / {max_edicts} edicts | {MiB(edict_size*num_edicts),g} / {MiB(edict_size*max_edicts),g} MiB]</DisplayString>
+		<DisplayString                                          >[{CurrentFunction(),sb} | {num_edicts} / {max_edicts} edicts | {MiB(edict_size*num_edicts),g} / {MiB(edict_size*max_edicts),g} MiB]</DisplayString>
+
+		<!--Expanded view-->
+		<Expand>
+			<Synthetic Name="is_qex">
+				<DisplayString>{effects_mask == -1}</DisplayString>
+			</Synthetic>
+
+			<!--Stack-->
+			<Synthetic Name="stack">
+				<!--Note: current function is not stored on stack, but in the xfunction member-->
+				<DisplayString Condition="!xfunction">no current function</DisplayString>
+				<DisplayString Condition="depth &gt; 1">{stack+1,[depth-1]na} =&gt; {*xfunction,view(nameonly)}</DisplayString>
+				<DisplayString>(empty) =&gt; {*xfunction,view(nameonly)}</DisplayString>
+				<Expand>
+					<CustomListItems Condition="depth &gt; 1 &amp;&amp; depth &lt;= sizeof(stack)/sizeof(stack[0])">
+						<Variable Name="i" InitialValue="1"/>
+						<!--First entry in stack is NULL, skip it-->
+						<Loop>
+							<Break Condition="i &gt;= depth"/>
+							<Item Name=" ">stack[i],view(full)</Item>
+							<Exec>i++</Exec>
+						</Loop>
+					</CustomListItems>
+					<Item Name="=&gt;" Condition="xfunction">*xfunction</Item>
+				</Expand>
+			</Synthetic>
+
+			<!--Edicts-->
+			<Synthetic Name="edicts">
+				<DisplayString>{num_edicts} / {max_edicts} edicts | {edict_size} bytes per edict | {MiB(edict_size*num_edicts),g} / {MiB(edict_size*max_edicts),g} MiB</DisplayString>
+				<Expand>
+					<IndexListItems>
+						<Size>num_edicts</Size>
+						<ValueNode>(edict_t*)((byte*)edicts + edict_size*($i)),na</ValueNode>
+					</IndexListItems>
+				</Expand>
+			</Synthetic>
+
+			<!--Globals-->
+			<Synthetic Name="globals">
+				<DisplayString>{progs-&gt;numglobaldefs} globals, {progs-&gt;numglobals} total values ({(progs-&gt;numglobals-progs-&gt;numglobaldefs)/2} vectors)</DisplayString>
+				<Expand>
+					<CustomListItems>
+						<Variable Name="i" InitialValue="1"/>
+						<Loop>
+							<Break Condition="i == progs-&gt;numglobaldefs"/>
+
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_string">PR_GetString(*(int*)GlobalData(i)),s</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_entity">PROG_TO_EDICT(*(int*)GlobalData(i)),na</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_function">&amp;functions[*(int*)GlobalData(i)],na</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_field">GetFieldAtOffset(*(int*)GlobalData(i)),na</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_float &amp;&amp; !IsVecGlobal(i)">*(float*)GlobalData(i),g</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_vector">*(float3_t*)GlobalData(i),g</Item>
+							<Item Name="{GlobalName(i),sb}" Condition="GlobalType(i)==ev_void">"(void)",sb</Item>
+
+							<Exec>i++</Exec>
+						</Loop>
+					</CustomListItems>
+				</Expand>
+			</Synthetic>
+
+			<!--Global defs-->
+			<Synthetic Name="globaldefs">
+				<DisplayString>{progs-&gt;numglobaldefs} defs</DisplayString>
+				<Expand>
+					<ArrayItems>
+						<Size>progs-&gt;numglobaldefs</Size>
+						<ValuePointer>globaldefs</ValuePointer>
+					</ArrayItems>
+				</Expand>
+			</Synthetic>
+
+			<!--Fields-->
+			<Synthetic Name="fields">
+				<DisplayString>{progs-&gt;numfielddefs} defs</DisplayString>
+				<Expand>
+					<ArrayItems>
+						<Size>progs-&gt;numfielddefs</Size>
+						<ValuePointer>fielddefs</ValuePointer>
+					</ArrayItems>
+				</Expand>
+			</Synthetic>
+
+			<!--Entity fields-->
+			<Synthetic Name="entity fields">
+				<DisplayString>{numentityfields} fields</DisplayString>
+				<Expand>
+					<ArrayItems>
+						<Size>numentityfields</Size>
+						<ValuePointer>entityfields,na</ValuePointer>
+					</ArrayItems>
+				</Expand>
+			</Synthetic>
+
+			<!--Functions-->
+			<Synthetic Name="functions">
+				<DisplayString>{progs-&gt;numfunctions} functions</DisplayString>
+				<Expand>
+					<ArrayItems>
+						<Size>progs-&gt;numfunctions</Size>
+						<ValuePointer>functions</ValuePointer>
+					</ArrayItems>
 				</Expand>
 			</Synthetic>
 		</Expand>
@@ -379,6 +572,74 @@
 			</Synthetic>
 
 			<Item Name="children" Condition="!IsLeaf()">children</Item>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	Cvar
+	================================================================================================================================
+	-->
+	<Type Name="cvar_s">
+		<DisplayString Condition="default_string != 0 &amp;&amp; strcmp(string, default_string) == 0">{name,sb}={string,s} (default) [{flags,en}]</DisplayString>
+		<DisplayString Condition="default_string != 0">{name,sb}={string,s} (default: {default_string,s}) [{flags,en}]</DisplayString>
+		<DisplayString>{name,sb}={string,s} [{flags,en}]</DisplayString>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	Localization entry
+	================================================================================================================================
+	-->
+	<Type Name="locentry_t">
+		<DisplayString>{key,sb}={value,s}</DisplayString>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	Localization
+	================================================================================================================================
+	-->
+	<Type Name="localization_t">
+		<DisplayString>[{numentries} entries]</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="0"/>
+				<Loop>
+					<Break Condition="i &gt;= numentries"/>
+					<Item Name="{entries[i].key,sb}">entries[i].value,s</Item>
+					<Exec>i++</Exec>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	PAK file
+	================================================================================================================================
+	-->
+	<Type Name="packfile_t">
+		<DisplayString>{name,sb} ({filelen} B)</DisplayString>
+	</Type>
+
+
+	<!--
+	================================================================================================================================
+	PAK archive
+	================================================================================================================================
+	-->
+	<Type Name="pack_s">
+		<DisplayString>{filename,sb} ({numfiles} files)</DisplayString>
+		<Expand>
+			<ArrayItems>
+				<Size>numfiles</Size>
+				<ValuePointer>files,na</ValuePointer>
+			</ArrayItems>
 		</Expand>
 	</Type>
 

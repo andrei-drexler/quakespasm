@@ -488,6 +488,8 @@ void GL_BuildLightmaps (void)
 	);
 
 	lightmap_data = (unsigned *) calloc (lmsize, sizeof (*lightmap_data));
+	if (!lightmap_data)
+		Sys_Error ("GL_BuildLightmaps: out of memory on %" SDL_PRIu64 " bytes", (uint64_t)(lmsize * sizeof (*lightmap_data)));
 
 	// compute offsets for each lightmap block
 	for (i=0; i<lightmap_count; i++)
@@ -604,6 +606,8 @@ void GL_BuildBModelVertexBuffer (void)
 // build vertex array
 	varray_bytes = sizeof (glvert_t) * numverts;
 	varray = (glvert_t *) malloc (varray_bytes);
+	if (!varray)
+		Sys_Error ("GL_BuildBModelVertexBuffer: out of memory on %u bytes", varray_bytes);
 	varray_index = 0;
 	
 	for (j=1 ; j<MAX_MODELS ; j++)
@@ -758,7 +762,7 @@ void GL_BuildBModelMarkBuffers (void)
 		numtex += m->texofs[TEXTYPE_COUNT];
 		maxnumtex = q_max (maxnumtex, m->numtextures);
 		for (i = 0; i < m->nummodelsurfaces; i++)
-			numtris += m->surfaces[i + m->firstmodelsurface].numedges - 2;
+			numtris += q_max (m->surfaces[i + m->firstmodelsurface].numedges, 2) - 2;
 	}
 
 	// allocate cpu-side buffers
@@ -827,7 +831,7 @@ void GL_BuildBModelMarkBuffers (void)
 			texidx[m->usedtextures[i]] = i;
 
 		for (i = 0, s = m->surfaces + m->firstmodelsurface; i < m->nummodelsurfaces; i++, s++)
-			cmds[m->firstcmd + texidx[s->texinfo->texnum]].count += (s->numedges - 2) * 3;
+			cmds[m->firstcmd + texidx[s->texinfo->texnum]].count += (q_max (s->numedges, 2) - 2) * 3;
 	}
 
 	// compute per-drawcall index buffer offsets

@@ -3,10 +3,9 @@
 <title>QuakeSpasm
 <toc>
 
-<em>Page last edited: September 2023.</em>
+<em>Page last edited: July 2024.</em>
 
 <sect>About<p>
-
 QuakeSpasm is a modern cross-platform Quake engine based on FitzQuake.
 </p><p>
 It includes support for 64 bit CPUs and custom music playback, a new
@@ -17,7 +16,6 @@ SDL2 has nicer features, smoother mouse input and better support for newer opera
 but no CD-ROM support.
 
 <sect>Downloads<p>
-
 <itemize>
 <item><url url="http://quakespasm.sourceforge.net/download.htm" name="Project Downloads">
 <item><url url="https://sourceforge.net/p/quakespasm/quakespasm/ci/master/tree/" name="Latest code repository">
@@ -138,6 +136,34 @@ QuakeSpasm 0.94 has support for playing the 2021 re-release content: Copy the qu
 
 
 <sect>Changes<p>
+
+<sect1>Changes in 0.96.3<p>
+<itemize>
+<item> Fix potential infinite loop when playing sounds with loop start >= end (e.g. misc/forcefield.wav from Madfox's kaptlog.zip)
+<item> Fix possible overflow when resampling very big sounds (e.g. gram1.wav from the 'A day like no other' mod.)
+<item> Change Sky_ClipPoly to allocate on the heap in if MAX_CLIP_VERTS limit is reached (e.g. with lim_daviddg from Liminal Spaces Jam)
+<item> Minor code cleanups. Updates to third party code.
+<item> Thanks to Andrei Drexler, Vincent Sonnier, Alexey Lysiuk, and Jaycie Ewald for patches.
+</itemize>
+</p>
+
+<sect1>Changes in 0.96.2<p>
+<itemize>
+<item> Fix stack buffer overrun Mod_PolyForUnlitSurface: fixes crash when loading lim_daviddg.bsp from Liminal Spaces Jam.
+<item> Fix potential buffer overflow in progs global string functions.
+<item> Fix potential buffer overflow in Mod_LoadAliasFrame()
+<item> Optimize BoxOnPlaneSide()
+<item> Reserve enough space in PF_makestatic() for worst case scenarios.
+<item> Improve handling of huge entities in SV_FindTouchedLeafs()
+<item> Warn about bad maps with only 1 or 2 edges per face (e.g.: mj4m?, alk_dancing, ej3_bizz, rotj_entsoy...)
+<item> Apply FOV gun scaling for r_showtris
+<item> Sliders with visible values in options menu.
+<item> game command now refuses setting a non-existing game directory
+<item> Fix build in C23 mode.
+<item> Minor code cleanups. Updated third party code, e.g. SDL, music codecs, etc.
+<item> Thanks to Andrei Drexler, Alexey Lysiuk, Diordany van Hemert, and Jaime Moreira for patches.
+</itemize>
+</p>
 
 <sect1>Changes in 0.96.1<p>
 <itemize>

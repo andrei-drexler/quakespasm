@@ -146,6 +146,10 @@ void InsertLinkAfter (link_t *l, link_t *after);
 
 //============================================================================
 
+#define PTR_IN_RANGE(ptr, begin, end)			(((uintptr_t)(ptr)-(uintptr_t)(begin)) < ((uintptr_t)(end)-(uintptr_t)(begin)))
+
+//============================================================================
+
 typedef struct vec_header_t {
 	size_t capacity;
 	size_t size;
@@ -157,6 +161,7 @@ typedef struct vec_header_t {
 #define VEC_POP(v)				do { SDL_assert(v && VEC_HEADER(v).size >= 1); VEC_HEADER(v).size--; } while (0)
 #define VEC_POP_N(v,n)			do { SDL_assert(v && VEC_HEADER(v).size >= (n)); VEC_HEADER(v).size -= (n); } while (0)
 #define VEC_SIZE(v)				((v) ? VEC_HEADER(v).size : 0)
+#define VEC_LAST(v)				((v)[VEC_SIZE(v)-1])
 #define VEC_FREE(v)				Vec_Free((void**)&(v))
 #define VEC_CLEAR(v)			Vec_Clear((void**)&(v))
 
@@ -168,6 +173,9 @@ void Vec_Free (void **pvec);
 void MultiString_Append (char **pvec, const char *str);
 
 //============================================================================
+
+#define BITARRAY_DWORDS(bits)		(((bits)+31)/32)
+#define BITARRAY_MEM_SIZE(bits)		(BITARRAY_DWORDS (bits) * sizeof (uint32_t))
 
 static inline qboolean GetBit (const uint32_t *arr, uint32_t i)
 {
@@ -267,7 +275,7 @@ extern char *q_strupr (char *str);
 extern int q_snprintf (char *str, size_t size, const char *format, ...) FUNC_PRINTF(3,4);
 extern int q_vsnprintf(char *str, size_t size, const char *format, va_list args) FUNC_PRINTF(3,0);
 
-#define PLURAL(count)	((int)(count)), (&"s"[((int)(count))==1])
+#define PLURAL(count)	((int)(count)), ((int)(count) == 1 ? "" : "s")
 
 //============================================================================
 
@@ -346,6 +354,8 @@ size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src);
 #define UNICODE_MAX			0x10FFFF
 
 #define QCHAR_BOX			11
+#define QCHAR_COLOR_MASK	((char)0x80)
+#define QCHAR_COLORED(x)	((char)((x) | QCHAR_COLOR_MASK))
 
 //============================================================================
 
@@ -398,20 +408,8 @@ void COM_CloseFile (int h);
 // these procedures open a file using COM_FindFile and loads it into a proper
 // buffer. the buffer is allocated with a total size of com_filesize + 1. the
 // procedures differ by their buffer allocation method.
-byte *COM_LoadStackFile (const char *path, void *buffer, int bufsize,
-						unsigned int *path_id);
-	// uses the specified stack stack buffer with the specified size
-	// of bufsize. if bufsize is too short, uses temp hunk. the bufsize
-	// must include the +1
-byte *COM_LoadTempFile (const char *path, unsigned int *path_id);
-	// allocates the buffer on the temp hunk.
 byte *COM_LoadHunkFile (const char *path, unsigned int *path_id);
 	// allocates the buffer on the hunk.
-byte *COM_LoadZoneFile (const char *path, unsigned int *path_id);
-	// allocates the buffer on the zone.
-void COM_LoadCacheFile (const char *path, struct cache_user_s *cu,
-						unsigned int *path_id);
-	// uses cache mem for allocating the buffer.
 byte *COM_LoadMallocFile (const char *path, unsigned int *path_id);
 	// allocates the buffer on the system mem (malloc).
 

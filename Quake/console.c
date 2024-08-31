@@ -381,36 +381,6 @@ static void Con_SetHotLink (conlink_t *link)
 
 /*
 ================
-Con_GetMousePos
-
-Computes the console offset corresponding to the current mouse position
-Returns true if the offset is inside the visible portion of the console
-================
-*/
-static qboolean Con_GetMousePos (conofs_t *ofs, contest_t testmode)
-{
-	int x, y;
-	SDL_GetMouseState (&x, &y);
-	return Con_ScreenToOffset (x, y, ofs, testmode);
-}
-
-/*
-================
-Con_GetMouseLink
-
-Returns the link at the current mouse position, if any, or NULL otherwise
-================
-*/
-static conlink_t *Con_GetMouseLink (void)
-{
-	conofs_t ofs;
-	if (Con_GetMousePos (&ofs, CT_INSIDE))
-		return Con_GetLinkAtOfs (&ofs);
-	return NULL;
-}
-
-/*
-================
 Con_ClearSelection
 ================
 */
@@ -634,8 +604,10 @@ void Con_Mousemove (int x, int y)
 {
 	if (con_mousestate == CMS_NOTPRESSED)
 	{
+		conofs_t ofs;
+		qboolean inside = Con_ScreenToOffset (x, y, &ofs, CT_INSIDE);
 		Con_SetHotLink (Con_GetLinkAtPixel (x, y));
-		VID_SetMouseCursor (con_hotlink ? MOUSECURSOR_HAND : MOUSECURSOR_DEFAULT);
+		VID_SetMouseCursor (con_hotlink ? MOUSECURSOR_HAND : inside ? MOUSECURSOR_IBEAM : MOUSECURSOR_DEFAULT);
 	}
 	else
 	{
@@ -846,6 +818,8 @@ qboolean Con_CopySelectionToClipboard (void)
 	// Convert to UTF-8
 	maxsize = UTF8_FromQuake (NULL, 0, qtext);
 	utf8 = (char *) malloc (maxsize);
+	if (!utf8)
+		Sys_Error ("Con_CopySelectionToClipboard: out of memory on %" SDL_PRIu64 " bytes", (uint64_t)maxsize);
 	UTF8_FromQuake (utf8, maxsize, qtext);
 
 	// Copy the UTF-8 text to clipboard
@@ -1078,7 +1052,7 @@ void Con_Init (void)
 		con_buffersize = CON_TEXTSIZE;
 	//johnfitz
 
-	con_text = (char *) Hunk_AllocName (con_buffersize, "context");//johnfitz -- con_buffersize replaces CON_TEXTSIZE
+	con_text = (char *) Hunk_AllocNameNoFill (con_buffersize, "context");//johnfitz -- con_buffersize replaces CON_TEXTSIZE
 	Q_memset (con_text, ' ', con_buffersize);//johnfitz -- con_buffersize replaces CON_TEXTSIZE
 	con_linewidth = -1;
 
@@ -1422,7 +1396,7 @@ void Con_LinkPrintf (const char *addr, const char *fmt, ...)
 	len = strlen (addr);
 	link = (conlink_t *) malloc (sizeof (conlink_t) + len + 1);
 	if (!link)
-		Sys_Error ("Con_LinkPrintf: out of memory on %" SDL_PRIu64 "u bytes", (uint64_t)(sizeof (conlink_t) + len + 1));
+		Sys_Error ("Con_LinkPrintf: out of memory on %" SDL_PRIu64 " bytes", (uint64_t)(sizeof (conlink_t) + len + 1));
 	
 	memcpy (link + 1, addr, len + 1);
 	link->path			= (const char *)(link + 1);
@@ -1596,7 +1570,7 @@ void Con_AddToTabList (const char *name, const char *partial, const char *type)
 	tab_t	*t,*insert;
 	char	*i_bash, *i_bash2;
 	const char *i_name, *i_name2;
-	int		len, mark;
+	int		namelen, typelen, mark;
 
 	if (!Con_Match (name, partial))
 		return;
@@ -1636,11 +1610,16 @@ void Con_AddToTabList (const char *name, const char *partial, const char *type)
 	}
 
 	mark = Hunk_LowMark ();
-	len = strlen (name);
-	t = (tab_t *) Hunk_AllocName (sizeof (tab_t) + len + 1, "tablist");
-	memcpy (t + 1, name, len + 1);
+	namelen = (int) strlen (name) + 1;
+	typelen = type ? (int) strlen (type) + 1 : 0;
+	t = (tab_t *) Hunk_AllocName (sizeof (tab_t) + namelen + typelen, "tablist");
 	t->name = (const char *) (t + 1);
-	t->type = type;
+	memcpy ((char *) t->name, name, namelen);
+	if (type)
+	{
+		t->type = t->name + namelen;
+		memcpy ((char *) t->type, type, typelen);
+	}
 	t->count = 1;
 
 	if (!tablist) //create list
@@ -1751,6 +1730,13 @@ static qboolean CompleteFileList (const char *partial, void *param)
 	return true;
 }
 
+static qboolean CompleteFileListSingle (const char *partial, void *param)
+{
+	if (Cmd_Argc () < 3)
+		CompleteFileList (partial, param);
+	return true;
+}
+
 static qboolean CompleteClassnames (const char *partial, void *unused)
 {
 	extern edict_t *sv_player;
@@ -1781,6 +1767,7 @@ static qboolean CompleteBindKeys (const char *partial, void *unused)
 {
 	int i;
 
+	// fall back to default tab completion after 1st arg (key name)
 	if (Cmd_Argc () > 2)
 		return false;
 
@@ -1797,6 +1784,10 @@ static qboolean CompleteBindKeys (const char *partial, void *unused)
 static qboolean CompleteUnbindKeys (const char *partial, void *unused)
 {
 	int i;
+
+	// disable completion after 1st arg (key name)
+	if (Cmd_Argc () > 2)
+		return true;
 
 	for (i = 0; i < MAX_KEYS; i++)
 	{
@@ -1820,15 +1811,15 @@ typedef struct arg_completion_type_s
 
 static const arg_completion_type_t arg_completion_types[] =
 {
-	{ "map",					CompleteFileList,		&extralevels },
-	{ "changelevel",			CompleteFileList,		&extralevels },
+	{ "map",					CompleteFileListSingle,	&extralevels },
+	{ "changelevel",			CompleteFileListSingle,	&extralevels },
 	{ "game",					CompleteFileList,		&modlist },
-	{ "record",					CompleteFileList,		&demolist },
-	{ "playdemo",				CompleteFileList,		&demolist },
-	{ "timedemo",				CompleteFileList,		&demolist },
-	{ "load",					CompleteFileList,		&savelist },
-	{ "save",					CompleteFileList,		&savelist },
-	{ "sky",					CompleteFileList,		&skylist },
+	{ "record",					CompleteFileListSingle,	&demolist },
+	{ "playdemo",				CompleteFileListSingle,	&demolist },
+	{ "timedemo",				CompleteFileListSingle,	&demolist },
+	{ "load",					CompleteFileListSingle,	&savelist },
+	{ "save",					CompleteFileListSingle,	&savelist },
+	{ "sky",					CompleteFileListSingle,	&skylist },
 	{ "r_showbboxes_filter",	CompleteClassnames,		NULL },
 	{ "bind",					CompleteBindKeys,		NULL },
 	{ "unbind",					CompleteUnbindKeys,		NULL },
@@ -2373,9 +2364,8 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 		Con_DrawInput ();
 
 //draw version number in bottom right
-	y += 8;
 	text = CONSOLE_TITLE_STRING;
-	M_PrintWhite (vid.conwidth - (strlen (text) << 3), y, text);
+	M_PrintWhite (vid.conwidth - (strlen (text) << 3), vid.conheight - 8, text);
 }
 
 

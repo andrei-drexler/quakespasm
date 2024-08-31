@@ -29,6 +29,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifdef _WIN32_WINNT
+#undef _WIN32_WINNT
+#endif
+#define _WIN32_WINNT 0x0600
 #include <windows.h>
 #include <mmsystem.h>
 #include <winreg.h>
@@ -557,7 +561,7 @@ qboolean Sys_Explore (const char *path)
 	if (FAILED (hr))
 		goto cleanup_folder;
 
-	hr = SHOpenFolderAndSelectItems (folder, 1, &file, 0);
+	hr = SHOpenFolderAndSelectItems (folder, 1, (LPCITEMIDLIST *) &file, 0);
 	if (SUCCEEDED (hr))
 		result = true;
 
@@ -656,6 +660,8 @@ findfile_t *Sys_FindFirst (const char *dir, const char *ext)
 		return NULL;
 
 	ret = (winfindfile_t *) calloc (1, sizeof (winfindfile_t));
+	if (!ret)
+		Sys_Error ("Sys_FindFirst: out of memory");
 	ret->handle = handle;
 	ret->data = data;
 	Sys_FillFindData (ret);
@@ -785,7 +791,7 @@ LRESULT CALLBACK KeyFilter (int nCode, WPARAM wParam, LPARAM lParam)
 			qboolean intercept =
 				force_intercept ||
 				key == HK_PRINTSCREEN ||
-				(key_dest == key_game || M_KeyBinding ())
+				(key_dest == key_game || M_WaitingForKeyBinding ())
 			;
 
 			if (intercept)
@@ -868,7 +874,12 @@ void Sys_mkdir (const char *path)
 static const wchar_t errortxt1[] = L"\nERROR-OUT BEGIN\n\n";
 static const wchar_t errortxt2[] = L"\nQUAKE ERROR: ";
 
-void Sys_Error (const char *error, ...)
+qboolean Sys_IsDebuggerPresent (void)
+{
+	return IsDebuggerPresent ();
+}
+
+void Sys_ReportError (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
@@ -903,9 +914,6 @@ void Sys_Error (const char *error, ...)
 		WriteConsoleW (houtput, L"\r\n",   2,		          NULL, NULL);
 		SDL_Delay (3000);	/* show the console 3 more seconds */
 	}
-
-	if (IsDebuggerPresent ())
-		DebugBreak ();
 
 	exit (1);
 }

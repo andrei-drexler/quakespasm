@@ -48,11 +48,27 @@ typedef enum gyromode_t
 } gyromode_t;
 
 qboolean IN_HasGyro (void);
+float IN_GetRawGyroMagnitude (void);
 void IN_StartGyroCalibration (void);
 qboolean IN_IsCalibratingGyro (void);
+float IN_GetGyroCalibrationProgress (void);
 
+float IN_GetRawLookMagnitude (void);
+float IN_GetRawMoveMagnitude (void);
+float IN_GetRawTriggerMagnitude (void);
+
+typedef enum gamepadtype_t
+{
+	GAMEPAD_NONE,
+	GAMEPAD_XBOX,
+	GAMEPAD_PLAYSTATION,
+	GAMEPAD_NINTENDO,
+} gamepadtype_t;
+
+qboolean IN_HasRumble (void);
 qboolean IN_HasGamepad (void);
 const char *IN_GetGamepadName (void);
+gamepadtype_t IN_GetGamepadType (void);
 void IN_UseNextGamepad (int dir, qboolean allow_disable);
 
 void IN_SendKeyEvents (void);
@@ -61,7 +77,9 @@ void IN_SendKeyEvents (void);
 void IN_UpdateInputMode (void);
 // do stuff if input mode (text/non-text) changes matter to the keyboard driver
 
-enum textmode_t IN_GetTextMode (void);
+qboolean IN_EmulatedCharEvents (void);
+
+enum keydevice_t IN_GetLastActiveDeviceType (void);
 
 void IN_Move (usercmd_t *cmd);
 // add additional movement on top of the keyboard move cmd

@@ -24,26 +24,29 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //gl_texmgr.h -- fitzquake's texture manager. manages opengl texture images
 
-#define TEXPREF_NONE			0x0000
-#define TEXPREF_MIPMAP			0x0001	// generate mipmaps
-// TEXPREF_NEAREST and TEXPREF_LINEAR aren't supposed to be ORed with TEX_MIPMAP
-#define TEXPREF_LINEAR			0x0002	// force linear
-#define TEXPREF_NEAREST			0x0004	// force nearest
-#define TEXPREF_ALPHA			0x0008	// allow alpha
-#define TEXPREF_PAD				0x0010	// allow padding
-#define TEXPREF_PERSIST			0x0020	// never free
-#define TEXPREF_OVERWRITE		0x0040	// overwrite existing same-name texture
-#define TEXPREF_NOPICMIP		0x0080	// always load full-sized
-#define TEXPREF_FULLBRIGHT		0x0100	// use fullbright mask palette
-#define TEXPREF_NOBRIGHT		0x0200	// use nobright mask palette
-#define TEXPREF_CONCHARS		0x0400	// use conchars palette
-#define TEXPREF_ARRAY			0x0800	// array texture
-#define TEXPREF_CUBEMAP			0x1000	// cubemap texture
-#define TEXPREF_BINDLESS		0x2000	// enable bindless usage
-#define TEXPREF_ALPHABRIGHT		0x4000	// use palette with lighting mask in alpha channel (0=fullbright, 1=lit)
-#define TEXPREF_CLAMP			0x8000	// clamp UVs
+typedef enum
+{
+	TEXPREF_NONE			= 0x0000,
+	TEXPREF_MIPMAP			= 0x0001,	// generate mipmaps
+	// TEXPREF_NEAREST and TEXPREF_LINEAR aren't supposed to be ORed with TEX_MIPMAP
+	TEXPREF_LINEAR			= 0x0002,	// force linear
+	TEXPREF_NEAREST			= 0x0004,	// force nearest
+	TEXPREF_ALPHA			= 0x0008,	// allow alpha
+	TEXPREF_PAD				= 0x0010,	// allow padding
+	TEXPREF_PERSIST			= 0x0020,	// never free
+	TEXPREF_OVERWRITE		= 0x0040,	// overwrite existing same-name texture
+	TEXPREF_NOPICMIP		= 0x0080,	// always load full-sized
+	TEXPREF_FULLBRIGHT		= 0x0100,	// use fullbright mask palette
+	TEXPREF_NOBRIGHT		= 0x0200,	// use nobright mask palette
+	TEXPREF_CONCHARS		= 0x0400,	// use conchars palette
+	TEXPREF_ARRAY			= 0x0800,	// array texture
+	TEXPREF_CUBEMAP			= 0x1000,	// cubemap texture
+	TEXPREF_BINDLESS		= 0x2000,	// enable bindless usage
+	TEXPREF_ALPHABRIGHT		= 0x4000,	// use palette with lighting mask in alpha channel (0=fullbright, 1=lit)
+	TEXPREF_CLAMP			= 0x8000,	// clamp UVs
 
-#define TEXPREF_HASALPHA		(TEXPREF_ALPHA|TEXPREF_ALPHABRIGHT) // texture has alpha channel
+	TEXPREF_HASALPHA		= (TEXPREF_ALPHA|TEXPREF_ALPHABRIGHT), // texture has alpha channel
+} textureflags_t;
 
 enum srcformat {SRC_INDEXED, SRC_LIGHTMAP, SRC_RGBA};
 
@@ -62,7 +65,7 @@ typedef struct gltexture_s {
 	unsigned short		height; //size of image as it exists in opengl
 	unsigned short		depth; //size of image as it exists in opengl
 	unsigned char		compression; //compression rate (1 = uncompressed)
-	unsigned int		flags;
+	textureflags_t		flags;
 	char			source_file[MAX_QPATH]; //relative filepath to data source, or "" if source is in memory
 	src_offset_t		source_offset; //byte offset into file, or memory address
 	enum srcformat		source_format; //format of pixel data (indexed, lightmap, or rgba)

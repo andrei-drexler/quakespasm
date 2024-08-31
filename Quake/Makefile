@@ -204,7 +204,7 @@ MUSIC_OBJS= bgmusic.o \
 	snd_umx.o
 COMOBJ_SND = snd_dma.o snd_mix.o snd_mem.o $(MUSIC_OBJS)
 SYSOBJ_SND = snd_sdl.o
-SYSOBJ_CDA = cd_sdl.o
+SYSOBJ_CDA = cd_null.o
 SYSOBJ_INPUT = in_sdl.o
 SYSOBJ_GL_VID= gl_vidsdl.o
 SYSOBJ_NET = net_bsd.o net_udp.o

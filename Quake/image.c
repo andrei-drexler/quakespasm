@@ -71,6 +71,8 @@ typedef struct stdio_buffer_s {
 static stdio_buffer_t *Buf_Alloc(FILE *f)
 {
 	stdio_buffer_t *buf = (stdio_buffer_t *) calloc(1, sizeof(stdio_buffer_t));
+	if (!buf)
+		Sys_Error ("Buf_Alloc: out of memory");
 	buf->f = f;
 	return buf;
 }
@@ -335,23 +337,34 @@ static byte *Image_LoadLMP (FILE *f, int *width, int *height)
 {
 	lmpheader_t	qpic;
 	size_t		pix;
+	int			mark;
 	void		*data;
 
-	fread(&qpic, sizeof(qpic), 1, f);
+	if (fread (&qpic, sizeof(qpic), 1, f) != 1)
+	{
+		fclose (f);
+		return NULL;
+	}
 	qpic.width = LittleLong (qpic.width);
 	qpic.height = LittleLong (qpic.height);
 
 	pix = qpic.width*qpic.height;
 
-	if (com_filesize != 8+pix)
+	if (com_filesize != sizeof (qpic) + pix)
 	{
-		fclose(f);
+		fclose (f);
 		return NULL;
 	}
 
-	data = (byte *) Hunk_Alloc(pix); //+1 to allow reading padding byte on last line
-	fread(data, 1, pix, f);
-	fclose(f);
+	mark = Hunk_LowMark ();
+	data = (byte *) Hunk_Alloc (pix);
+	if (fread (data, 1, pix, f) != pix)
+	{
+		Hunk_FreeToLowMark (mark);
+		fclose (f);
+		return NULL;
+	}
+	fclose (f);
 
 	*width = qpic.width;
 	*height = qpic.height;

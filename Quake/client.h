@@ -195,6 +195,7 @@ typedef struct
 	qboolean	nodrift;
 	float		driftmove;
 	double		laststop;
+	double		lastcenterstart;	// last time centerview was called
 
 	float		wheel_pitch;	// for looking up/down using the mouse wheel
 

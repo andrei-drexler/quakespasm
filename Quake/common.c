@@ -1908,13 +1908,19 @@ static int COM_FindFile (const char *filename, int *handle, FILE **file,
 		}
 	}
 
-	if (strcmp(COM_FileGetExtension(filename), "pcx") != 0
-		&& strcmp(COM_FileGetExtension(filename), "tga") != 0
-		&& strcmp(COM_FileGetExtension(filename), "lit") != 0
-		&& strcmp(COM_FileGetExtension(filename), "vis") != 0
-		&& strcmp(COM_FileGetExtension(filename), "ent") != 0)
-		Con_DPrintf ("FindFile: can't find %s\n", filename);
-	else	Con_DPrintf2("FindFile: can't find %s\n", filename);
+	if (developer.value)
+	{
+		const char *ext = COM_FileGetExtension (filename);
+
+		if (strcmp(ext, "pcx") != 0 &&
+			strcmp(ext, "tga") != 0 &&
+			strcmp(ext, "lit") != 0 &&
+			strcmp(ext, "vis") != 0 &&
+			strcmp(ext, "ent") != 0)
+			Con_DPrintf ("FindFile: can't find %s\n", filename);
+		else
+			Con_DPrintf2 ("FindFile: can't find %s\n", filename);
+	}
 
 	if (handle)
 		*handle = -1;
@@ -1992,16 +1998,8 @@ Filename are reletive to the quake directory.
 Allways appends a 0 byte.
 ============
 */
-#define	LOADFILE_ZONE		0
-#define	LOADFILE_HUNK		1
-#define	LOADFILE_TEMPHUNK	2
-#define	LOADFILE_CACHE		3
-#define	LOADFILE_STACK		4
-#define	LOADFILE_MALLOC		5
-
-static byte	*loadbuf;
-static cache_user_t *loadcache;
-static int	loadsize;
+#define	LOADFILE_HUNK		0
+#define	LOADFILE_MALLOC		1
 
 byte *COM_LoadFile (const char *path, int usehunk, unsigned int *path_id)
 {
@@ -2023,22 +2021,7 @@ byte *COM_LoadFile (const char *path, int usehunk, unsigned int *path_id)
 	switch (usehunk)
 	{
 	case LOADFILE_HUNK:
-		buf = (byte *) Hunk_AllocName (len+1, base);
-		break;
-	case LOADFILE_TEMPHUNK:
-		buf = (byte *) Hunk_TempAlloc (len+1);
-		break;
-	case LOADFILE_ZONE:
-		buf = (byte *) Z_Malloc (len+1);
-		break;
-	case LOADFILE_CACHE:
-		buf = (byte *) Cache_Alloc (loadcache, len+1, base);
-		break;
-	case LOADFILE_STACK:
-		if (len < loadsize)
-			buf = loadbuf;
-		else
-			buf = (byte *) Hunk_TempAlloc (len+1);
+		buf = (byte *) Hunk_AllocNameNoFill (len+1, base);
 		break;
 	case LOADFILE_MALLOC:
 		buf = (byte *) malloc (len+1);
@@ -2063,34 +2046,6 @@ byte *COM_LoadFile (const char *path, int usehunk, unsigned int *path_id)
 byte *COM_LoadHunkFile (const char *path, unsigned int *path_id)
 {
 	return COM_LoadFile (path, LOADFILE_HUNK, path_id);
-}
-
-byte *COM_LoadZoneFile (const char *path, unsigned int *path_id)
-{
-	return COM_LoadFile (path, LOADFILE_ZONE, path_id);
-}
-
-byte *COM_LoadTempFile (const char *path, unsigned int *path_id)
-{
-	return COM_LoadFile (path, LOADFILE_TEMPHUNK, path_id);
-}
-
-void COM_LoadCacheFile (const char *path, struct cache_user_s *cu, unsigned int *path_id)
-{
-	loadcache = cu;
-	COM_LoadFile (path, LOADFILE_CACHE, path_id);
-}
-
-// uses temp hunk if larger than bufsize
-byte *COM_LoadStackFile (const char *path, void *buffer, int bufsize, unsigned int *path_id)
-{
-	byte	*buf;
-
-	loadbuf = (byte *)buffer;
-	loadsize = bufsize;
-	buf = COM_LoadFile (path, LOADFILE_STACK, path_id);
-
-	return buf;
 }
 
 // returns malloc'd memory
@@ -2471,6 +2426,55 @@ void COM_ResetGameDirectories(const char *newgamedirs)
 
 /*
 =================
+COM_GameDirExists
+
+Checks if a gamedir exists in any basedir
+=================
+*/
+static qboolean COM_GameDirExists (const char *game)
+{
+	int i;
+
+	for (i = 0; i < com_numbasedirs; i++)
+		if (Sys_FileType (va ("%s/%s", com_basedirs[i], game)) == FS_ENT_DIRECTORY)
+			return true;
+
+	return false;
+}
+
+/*
+=================
+COM_ValidateGameDirs
+=================
+*/
+static qboolean COM_ValidateGameDirs (const char *newgamedirs)
+{
+	char	dirscopy[1024];
+	char	*newpath;
+
+	q_strlcpy (dirscopy, newgamedirs, sizeof (dirscopy));
+
+	// parse the individual semicolon-separated gamedirs (e.g. id1;ad;ad_heresp1)
+	for (newpath = dirscopy; newpath && *newpath; )
+	{
+		char *p = strchr (newpath, ';');
+		if (p)
+			*p++ = 0;
+
+		if (!COM_GameDirExists (newpath))
+		{
+			Con_Printf ("No such game directory \"%s\"\n", newpath);
+			return false;
+		}
+
+		newpath = p;
+	}
+
+	return true;
+}
+
+/*
+=================
 COM_SwitchGame
 =================
 */
@@ -2482,6 +2486,9 @@ void COM_SwitchGame (const char *paths)
 		Con_Printf("\"game\" is already \"%s\"\n", COM_GetGameNames(true));
 		return;
 	}
+
+	if (!COM_ValidateGameDirs (paths))
+		return;
 
 	Host_WaitForSaveThread ();
 
@@ -2578,41 +2585,9 @@ static void COM_Game_f (void)
 		}
 
 		COM_SwitchGame (paths);
-
 	}
 	else //Diplay the current gamedir
 		Con_Printf("\"game\" is \"%s\"\n", COM_GetGameNames(true));
-}
-
-/*
-=================
-COM_IsFileWritable
-=================
-*/
-static qboolean COM_IsFileWritable (const char *path)
-{
-	qboolean exists = false;
-	FILE *f;
-
-	if (!path || !*path)
-		return false;
-
-	f = Sys_fopen (path, "rb");
-	if (f)
-	{
-		exists = true;
-		fclose (f);
-	}
-
-	f = Sys_fopen (path, "ab");
-	if (!f)
-		return false;
-
-	fclose (f);
-	if (!exists)
-		Sys_remove (path);
-
-	return true;
 }
 
 /*
@@ -3262,6 +3237,8 @@ void COM_InitFilesystem (void) //johnfitz -- modified based on topaz's tutorial
 		p = com_argv[i + 1];
 		if (!*p || !strcmp(p, ".") || strstr(p, "..") || strstr(p, "/") || strstr(p, "\\") || strstr(p, ":"))
 			Sys_Error ("gamedir should be a single directory name, not a path\n");
+		if (!COM_GameDirExists (p))
+			Sys_Error ("No such game directory \"%s\"", p);
 		com_modified = true;
 		if (p != NULL)
 			COM_AddGameDirectory (p);
@@ -3513,7 +3490,7 @@ LOC_LoadFile
 qboolean LOC_LoadFile (const char *file)
 {
 	char path[1024];
-	int i,lineno;
+	int i,lineno,warnings;
 	char *cursor;
 
 	SDL_RWops *rw = NULL;
@@ -3614,6 +3591,7 @@ fail:			mz_zip_reader_end(&archive);
 	if ((unsigned char)(cursor[0]) == 0xEF && (unsigned char)(cursor[1]) == 0xBB && (unsigned char)(cursor[2]) == 0xBF)
 		cursor += 3;
 
+	warnings = 0;
 	lineno = 0;
 	while (*cursor)
 	{
@@ -3724,6 +3702,19 @@ fail:			mz_zip_reader_end(&archive);
 
 			UTF8_ToQuake (value, strlen (value) + 1, value);
 
+			// Log entries with unprintable characters if developer is set to 2 or higher
+			if (developer.value >= 2.f && strchr (value, QCHAR_BOX))
+			{
+				int trim = (int) strlen (value);
+				// trim trailing newlines
+				while (trim > 0 && value[trim - 1] == '\n')
+					--trim;
+				// print header before first entry
+				if (!warnings++)
+					Sys_Printf ("Entries with unprintable characters:\n");
+				Sys_Printf ("   %d. %s = \"%.*s\"\n", warnings, line, trim, value);
+			}
+
 			entry = &localization.entries[localization.numentries++];
 			entry->key = line;
 			entry->value = value;
@@ -3732,6 +3723,9 @@ fail:			mz_zip_reader_end(&archive);
 		if (*cursor)
 			*cursor++ = 0; // terminate line and advance to next
 	}
+
+	if (developer.value >= 2.f && warnings > 0)
+		Sys_Printf ("%d strings with unprintable characters\n", warnings);
 
 	// hash all entries
 
@@ -4049,7 +4043,7 @@ size_t LOC_Format (const char *format, const char* (*getarg_fn) (int idx, void* 
 
 static const uint32_t 	utf8_maxcode[4] = {0x7F, 0x7FF, 0xFFFF, 0x10FFFF}; // 1/2/3/4 bytes
 
-static uint8_t			unicode_translit[65536];
+static char				unicode_translit[65536][2];
 static qboolean			unicode_translit_init = false;
 
 static const uint32_t qchar_to_unicode[256] =
@@ -4271,36 +4265,58 @@ UTF8_ToQuake
 
 Transliterates a string from UTF-8 to Quake encoding
 
-Note: only single-character transliterations are used for now,
-mainly to remove diacritics
-
 Returns the number of written characters (including the NUL terminator)
 if a valid output buffer is provided (dst is non-NULL, maxbytes > 0),
 or the total amount of space necessary to encode the entire src string
 if dst is NULL and maxbytes is 0.
+
+Note: only single-character and two-character transliterations are used
+so that the string is never expanded during the process.
 ==================
 */
 size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src)
 {
 	size_t i, j;
+	uint32_t cp;
 
 	if (!unicode_translit_init)
 	{
-		// single-character transliterations
+		// precomputed single-character/two-character transliterations
 		for (i = 0; i < countof (unicode_translit_src); i++)
-			unicode_translit[unicode_translit_src[i][0]] = (uint8_t) unicode_translit_src[i][1];
+		{
+			unicode_translit[unicode_translit_src[i].code][0] = unicode_translit_src[i].remap[0];
+			unicode_translit[unicode_translit_src[i].code][1] = unicode_translit_src[i].remap[1];
+		}
 
 		// Quake-specific characters: we process the list in reverse order
 		// so that codepoints used for both colored and non-colored qchars
 		// end up being remapped to the non-colored versions
 		// Note: 0 is not included
 		for (i = countof (qchar_to_unicode) - 1; i > 0; i--)
+		{
 			if (qchar_to_unicode[i] >= 128 && qchar_to_unicode[i] < countof (unicode_translit))
-				unicode_translit[qchar_to_unicode[i]] = (uint8_t) i;
+			{
+				unicode_translit[qchar_to_unicode[i]][0] = (char) i;
+				unicode_translit[qchar_to_unicode[i]][1] = '\0';
+			}
+		}
 
 		// map ASCII characters to themselves
 		for (i = 0; i < 128; i++)
-			unicode_translit[i] = (uint8_t) i;
+		{
+			unicode_translit[i][0] = (char) i;
+			unicode_translit[i][1] = '\0';
+		}
+
+		// Map all other characters to QCHAR_BOX (unknown character)
+		for (i = 0; i < Q_COUNTOF (unicode_translit); i++)
+		{
+			if (!unicode_translit[i][0])
+			{
+				unicode_translit[i][0] = QCHAR_BOX;
+				unicode_translit[i][1] = '\0';
+			}
+		}
 
 		unicode_translit_init = true;
 	}
@@ -4323,10 +4339,12 @@ size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src)
 			if (!*src)
 				break;
 
-			// Every codepoint maps to a single Quake character
-			UTF8_ReadCodePoint (&src);
-
-			j++;
+			// A codepoint maps to either one or two Quake characters
+			cp = UTF8_ReadCodePoint (&src);
+			if (cp < Q_COUNTOF (unicode_translit))
+				j += unicode_translit[cp][1] != '\0' ? 2 : 1;
+			else
+				j++;
 		}
 
 		return j + 1; // include terminator
@@ -4336,8 +4354,6 @@ size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src)
 
 	for (i = 0; i < maxbytes && *src; i++)
 	{
-		uint32_t cp;
-
 		// ASCII fast path
 		while (*src && i < maxbytes && (byte)*src < 0x80)
 			dst[i++] = *src++;
@@ -4348,14 +4364,14 @@ size_t UTF8_ToQuake (char *dst, size_t maxbytes, const char *src)
 		cp = UTF8_ReadCodePoint (&src);
 		if (cp < countof (unicode_translit))
 		{
-			cp = unicode_translit[cp];
-			if (!cp)
-				cp = QCHAR_BOX;
+			char c0 = unicode_translit[cp][0];
+			char c1 = unicode_translit[cp][1];
+			dst[i] = c0;
+			if (c1 && i + 1 < maxbytes)
+				dst[++i] = c1;
 		}
 		else
-			cp = QCHAR_BOX;
-
-		dst[i] = (uint8_t) cp;
+			dst[i] = QCHAR_BOX;
 	}
 
 	dst[i++] = '\0';

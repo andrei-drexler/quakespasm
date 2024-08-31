@@ -224,7 +224,7 @@ copy "$(SolutionDir)..\zlib\$(PlatformShortName)\*.dll" "$(TargetDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Quake\bgmusic.c" />
-    <ClCompile Include="..\..\Quake\cd_sdl.c" />
+    <ClCompile Include="..\..\Quake\cd_null.c" />
     <ClCompile Include="..\..\Quake\cfgfile.c" />
     <ClCompile Include="..\..\Quake\chase.c" />
     <ClCompile Include="..\..\Quake\cl_demo.c" />

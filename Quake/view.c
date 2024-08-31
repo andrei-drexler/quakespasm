@@ -146,6 +146,7 @@ cvar_t	v_centerspeed = {"v_centerspeed","500", CVAR_NONE};
 
 void V_StartPitchDrift (void)
 {
+	cl.lastcenterstart = cl.time;
 #if 1
 	if (cl.laststop == cl.time)
 	{

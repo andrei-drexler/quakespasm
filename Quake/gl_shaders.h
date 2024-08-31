@@ -224,8 +224,7 @@ SOFTWARE.*/\
 "\n"\
 "#define DITHER_NOISE(uv) tri(bayer01(ivec2(uv)))\n"\
 "#define SCREEN_SPACE_NOISE() DITHER_NOISE(floor(gl_FragCoord.xy)+0.5)\n"\
-"#define SUPPRESS_BANDING() (bayer(ivec2(gl_FragCoord.xy)) * (1./255.))\n"\
-"#define PAL_NOISESCALE (9./255.)\n"\
+"#define SUPPRESS_BANDING() bayer(ivec2(gl_FragCoord.xy))\n"\
 
 ////////////////////////////////////////////////////////////////
 
@@ -245,7 +244,7 @@ static const char postprocess_fragment_shader[] =
 PALETTE_BUFFER
 NOISE_FUNCTIONS
 "\n"
-"layout(location=0) uniform vec3 Params;\n"
+"layout(location=0) uniform vec4 Params;\n"
 "\n"
 "layout(location=0) out vec4 out_fragcolor;\n"
 "\n"
@@ -254,11 +253,12 @@ NOISE_FUNCTIONS
 "	float gamma = Params.x;\n"
 "	float contrast = Params.y;\n"
 "	float scale = Params.z;\n"
+"	float dither = Params.w;\n"
 "	out_fragcolor = texelFetch(GammaTexture, ivec2(gl_FragCoord), 0);\n"
 "#if PALETTIZE == 1\n"
 "	vec2 noiseuv = floor(gl_FragCoord.xy * scale) + 0.5;\n"
 "	out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"	out_fragcolor.rgb += DITHER_NOISE(noiseuv) * PAL_NOISESCALE;\n"
+"	out_fragcolor.rgb += DITHER_NOISE(noiseuv) * dither;\n"
 "	out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "#endif // PALETTIZE == 1\n"
 "#if PALETTIZE\n"
@@ -285,6 +285,8 @@ NOISE_FUNCTIONS
 "	vec4	SkyFog;\n"\
 "	vec3	WindDir;\n"\
 "	float	WindPhase;\n"\
+"	float	ScreenDither;\n"\
+"	float	TextureDither;\n"\
 "	vec3	EyePos;\n"\
 "	float	Time;\n"\
 "	float	ZLogScale;\n"\
@@ -720,16 +722,16 @@ OIT_OUTPUT (out_fragcolor)
 "	farblend *= farblend;\n"
 "	out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
 "	float luma = dot(out_fragcolor.rgb, vec3(.25, .625, .125));\n"
-"	float nearnoise = tri(whitenoise01(lmuv * lmsize)) * luma;\n"
-"	float farnoise = Fog.w > 0. ? SCREEN_SPACE_NOISE() : 0.;\n"
-"	out_fragcolor.rgb += mix(nearnoise, farnoise, farblend) * PAL_NOISESCALE;\n"
+"	float nearnoise = tri(whitenoise01(lmuv * lmsize)) * luma * TextureDither;\n"
+"	float farnoise = Fog.w > 0. ? SCREEN_SPACE_NOISE() * ScreenDither : 0.;\n"
+"	out_fragcolor.rgb += mix(nearnoise, farnoise, farblend);\n"
 "	out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "#endif // DITHER == 1\n"
 "#if DITHER >= 2\n"
 "	// nuke extra precision in 10-bit framebuffer\n"
 "	out_fragcolor.rgb = floor(out_fragcolor.rgb * 255. + 0.5) * (1./255.);\n"
 "#elif DITHER == 0\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING ();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -803,11 +805,11 @@ OIT_OUTPUT (out_fragcolor)
 "	if (Fog.w > 0.)\n"
 "	{\n"
 "		out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "		out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "	}\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -897,7 +899,7 @@ NOISE_FUNCTIONS
 "	result.rgb = mix(result.rgb, layer.rgb, layer.a);\n"
 "	result.rgb = mix(result.rgb, SkyFog.rgb, SkyFog.a);\n"
 "	out_fragcolor = result;\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "}\n";
 
 ////////////////////////////////////////////////////////////////
@@ -961,10 +963,10 @@ NOISE_FUNCTIONS
 "	out_fragcolor.rgb = mix(out_fragcolor.rgb, SkyFog.rgb, SkyFog.a);\n"
 "#if DITHER\n"
 "	out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"	out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"	out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "	out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -1000,6 +1002,7 @@ static const char sky_boxside_fragment_shader[] =
 NOISE_FUNCTIONS
 "\n"
 "layout(location=2) uniform vec4 Fog;\n"
+"layout(location=3) uniform float ScreenDither;\n"
 "\n"
 "layout(location=0) in vec3 in_dir;\n"
 "layout(location=1) in vec2 in_uv;\n"
@@ -1012,10 +1015,10 @@ NOISE_FUNCTIONS
 "	out_fragcolor.rgb = mix(out_fragcolor.rgb, Fog.rgb, Fog.w);\n"
 "#if DITHER\n"
 "	out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"	out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"	out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "	out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -1041,6 +1044,7 @@ NOISE_FUNCTIONS
 "	mat4	ViewProj;\n"\
 "	vec3	EyePos;\n"\
 "	vec4	Fog;\n"\
+"	float	ScreenDither;\n"\
 "	InstanceData instances[];\n"\
 "};\n"\
 
@@ -1185,11 +1189,11 @@ OIT_OUTPUT (out_fragcolor)
 "	if (abs(Fog.w) > 0.)\n"
 "	{\n"
 "		out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "		out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "	}\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -1239,11 +1243,11 @@ NOISE_FUNCTIONS
 "	if (Fog.w > 0.)\n"
 "	{\n"
 "		out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "		out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "	}\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -1313,11 +1317,11 @@ OIT_OUTPUT (out_fragcolor)
 "	if (Fog.w > 0.)\n"
 "	{\n"
 "		out_fragcolor.rgb = sqrt(out_fragcolor.rgb);\n"
-"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * PAL_NOISESCALE;\n"
+"		out_fragcolor.rgb += SCREEN_SPACE_NOISE() * ScreenDither;\n"
 "		out_fragcolor.rgb *= out_fragcolor.rgb;\n"
 "	}\n"
 "#else\n"
-"	out_fragcolor.rgb += SUPPRESS_BANDING();\n"
+"	out_fragcolor.rgb += SUPPRESS_BANDING() * ScreenDither;\n"
 "#endif\n"
 "}\n";
 
@@ -1612,6 +1616,8 @@ DRAW_ELEMENTS_INDIRECT_COMMAND
 "		uint numedges = SURF_NUMEDGES(surfbase);\n"
 "		uint firstvert = SURF_FIRSTVERT(surfbase);\n"
 "		uint cmdbase = texnum * uint(SIZEOF_CMD);\n"
+"		// some bsps out there have faces with < 2 edges, which would cause underflow below\n"
+"		numedges = max(numedges, 2u);\n"
 "		uint ofs = CMD_FIRST_INDEX(cmdbase) + atomicAdd(CMD_COUNT(cmdbase), 3u * (numedges - 2u));\n"
 "		for (j = 2u; j < numedges; j++)\n"
 "		{\n"

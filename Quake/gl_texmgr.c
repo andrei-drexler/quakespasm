@@ -39,6 +39,11 @@ static const struct {
 
 cvar_t			r_softemu = {"r_softemu", "0", CVAR_ARCHIVE};
 cvar_t			r_softemu_metric = {"r_softemu_metric", "-1", CVAR_ARCHIVE};
+cvar_t			r_softemu_lightmap_banding = {"r_softemu_lightmap_banding", "-1", CVAR_ARCHIVE};
+cvar_t			r_softemu_mdl_warp = {"r_softemu_mdl_warp", "-1", CVAR_ARCHIVE};
+cvar_t			r_softemu_dither_screen = {"r_softemu_dither_screen", "1.0", CVAR_ARCHIVE};
+cvar_t			r_softemu_dither_texture = {"r_softemu_dither_texture", "1.0", CVAR_ARCHIVE};
+
 static cvar_t	gl_max_size = {"gl_max_size", "0", CVAR_NONE};
 static cvar_t	gl_picmip = {"gl_picmip", "0", CVAR_NONE};
 cvar_t			gl_lodbias = {"gl_lodbias", "auto", CVAR_ARCHIVE };
@@ -333,8 +338,8 @@ void TexMgr_ApplySettings (void)
 	gl_texfilter.anisotropy	= CLAMP (1.f, gl_texture_anisotropy.value, gl_max_anisotropy);
 	gl_texfilter.lodbias	= lodbias;
 
-	// softemu 2 & 3 override filtering mode, unless it's GL_NEAREST
-	if (softemu >= SOFTEMU_COARSE && gl_texfilter.mode != 0)
+	// if softemu is either 2 & 3 or r_softemu_lightmap_banding is > 0 we override the filtering mode, unless it's GL_NEAREST
+	if (gl_texfilter.mode != 0 && (softemu >= SOFTEMU_COARSE || r_softemu_lightmap_banding.value > 0.f))
 	{
 		const float SOFTEMU_ANISOTROPY = 8.f;
 		gl_texfilter.mode = 2; // nearest with linear mips
@@ -464,6 +469,8 @@ static void TexMgr_Imagedump_f (void)
 
 		GL_Bind (GL_TEXTURE0, glt);
 		buffer = (byte *) malloc(glt->width * glt->height * glt->depth * channels);
+		if (!buffer)
+			Sys_Error ("TexMgr_Imagedump_f: out of memory (%dx%dx%d %d bpp)", glt->width, glt->height, glt->depth, channels * 8);
 
 		if (glt->flags & TEXPREF_CUBEMAP)
 		{
@@ -539,10 +546,9 @@ TexMgr_CompressTextures_f -- called when gl_compress_textures changes
 */
 void TexMgr_CompressTextures_f (cvar_t *var)
 {
-	qboolean compress = var->value != 0.f;
 	gltexture_t	*glt;
 
-	Con_SafePrintf ("Using %s textures\n", "uncompressed" + 2 * compress);
+	Con_SafePrintf ("Using %s textures\n", var->value ? "compressed" : "uncompressed");
 
 	// In an attempt to reduce VRAM fragmentation, instead of unloading and reloading
 	// each texture sequentially, we first unload them all, then reload them
@@ -739,7 +745,7 @@ void TexMgr_LoadPalette (void)
 		Sys_Error ("Couldn't load gfx/palette.lmp");
 
 	mark = Hunk_LowMark ();
-	pal = (byte *) Hunk_Alloc (768);
+	pal = (byte *) Hunk_AllocNoFill (768);
 	if (fread (pal, 768, 1, f) != 1)
 		Sys_Error ("Failed reading gfx/palette.lmp");
 	fclose(f);
@@ -747,7 +753,7 @@ void TexMgr_LoadPalette (void)
 	COM_FOpenFile ("gfx/colormap.lmp", &f, NULL);
 	if (!f)
 		Sys_Error ("Couldn't load gfx/colormap.lmp");
-	colormap = (byte *) Hunk_Alloc (256 * 64);
+	colormap = (byte *) Hunk_AllocNoFill (256 * 64);
 	if (fread (colormap, 256 * 64, 1, f) != 1)
 		Sys_Error ("TexMgr_LoadPalette: colormap read error");
 	fclose(f);
@@ -866,6 +872,11 @@ void TexMgr_Init (void)
 	Cvar_SetCallback (&gl_lodbias, TexMgr_LodBias_f);
 	Cvar_RegisterVariable (&r_softemu);
 	Cvar_SetCallback (&r_softemu, TexMgr_SoftEmu_f);
+	Cvar_RegisterVariable (&r_softemu_lightmap_banding);
+	Cvar_SetCallback (&r_softemu_lightmap_banding, TexMgr_SoftEmu_f);
+	Cvar_RegisterVariable (&r_softemu_mdl_warp);
+	Cvar_RegisterVariable (&r_softemu_dither_screen);
+	Cvar_RegisterVariable (&r_softemu_dither_texture);
 	Cmd_AddCommand ("gl_describetexturemodes", &TexMgr_DescribeTextureModes_f);
 	cmd = Cmd_AddCommand ("imagelist", &TexMgr_Imagelist_f);
 	if (cmd)
@@ -1049,7 +1060,7 @@ static unsigned *TexMgr_ResampleTexture (unsigned *in, int inwidth, int inheight
 
 	outwidth = TexMgr_Pad(inwidth);
 	outheight = TexMgr_Pad(inheight);
-	out = (unsigned *) Hunk_Alloc(outwidth*outheight*4);
+	out = (unsigned *) Hunk_AllocNoFill (outwidth*outheight*4);
 
 	xfrac = ((inwidth-1) << 16) / (outwidth-1);
 	yfrac = ((inheight-1) << 16) / (outheight-1);
@@ -1234,7 +1245,7 @@ static unsigned *TexMgr_8to32 (byte *in, int pixels, unsigned int *usepal)
 	int i;
 	unsigned *out, *data;
 
-	out = data = (unsigned *) Hunk_Alloc(pixels*4);
+	out = data = (unsigned *) Hunk_AllocNoFill (pixels*4);
 
 	for (i = 0; i < pixels; i++)
 		*out++ = usepal[*in++];
@@ -1257,7 +1268,7 @@ static byte *TexMgr_PadImageW (byte *in, int width, int height, byte padbyte)
 
 	outwidth = TexMgr_Pad(width);
 
-	out = data = (byte *) Hunk_Alloc(outwidth*height);
+	out = data = (byte *) Hunk_AllocNoFill(outwidth*height);
 
 	for (i = 0; i < height; i++)
 	{
@@ -1286,7 +1297,7 @@ static byte *TexMgr_PadImageH (byte *in, int width, int height, byte padbyte)
 	srcpix = width * height;
 	dstpix = width * TexMgr_Pad(height);
 
-	out = data = (byte *) Hunk_Alloc(dstpix);
+	out = data = (byte *) Hunk_AllocNoFill(dstpix);
 
 	for (i = 0; i < srcpix; i++)
 		*out++ = *in++;
@@ -1665,7 +1676,7 @@ void TexMgr_ReloadImage (gltexture_t *glt, int shirt, int pants)
 		else if (glt->source_format == SRC_LIGHTMAP) {
 			size *= lightmap_bytes;
 		}
-		data = (byte *) Hunk_Alloc (size);
+		data = (byte *) Hunk_AllocNoFill (size);
 		sz = (int) fread (data, 1, size, f);
 		fclose (f);
 		if (sz != size) {
@@ -1737,7 +1748,7 @@ invalid:	Con_Printf ("TexMgr_ReloadImage: invalid source for %s\n", glt->name);
 
 		//translate texture
 		size = glt->width * glt->height;
-		dst = translated = (byte *) Hunk_Alloc (size);
+		dst = translated = (byte *) Hunk_AllocNoFill (size);
 		src = data;
 
 		for (i = 0; i < size; i++)

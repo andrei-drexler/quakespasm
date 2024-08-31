@@ -1,0 +1,27 @@
+name: MinGW CI
+
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    name: Build MinGW
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - target: win32
+            package: i686-win32
+          - target: win64
+            package: x86-64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install gcc-mingw-w64-${{ matrix.config.package }}
+
+      - name: Build MinGW ${{ matrix.config.target }}
+        run: |
+          export MAKEFLAGS=--jobs=3\ --keep-going
+          cd Quake && ./build_cross_${{ matrix.config.target }}-sdl2.sh

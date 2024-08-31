@@ -81,6 +81,7 @@ float		scr_conlines;		// lines of console to display
 //johnfitz -- new cvars
 cvar_t		scr_menuscale = {"scr_menuscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_menubgalpha = {"scr_menubgalpha", "0.7", CVAR_ARCHIVE};
+cvar_t		scr_menubgstyle = {"scr_menubgstyle", "-1", CVAR_ARCHIVE};
 cvar_t		scr_sbarscale = {"scr_sbarscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_sbaralpha = {"scr_sbaralpha", "0.75", CVAR_ARCHIVE};
 cvar_t		scr_conwidth = {"scr_conwidth", "0", CVAR_ARCHIVE};
@@ -110,6 +111,9 @@ cvar_t		scr_printspeed = {"scr_printspeed","8",CVAR_NONE};
 cvar_t		gl_triplebuffer = {"gl_triplebuffer", "1", CVAR_ARCHIVE};
 
 cvar_t		cl_gun_fovscale = {"cl_gun_fovscale","1",CVAR_ARCHIVE}; // Qrack
+cvar_t		cl_gun_x = {"cl_gun_x","0",CVAR_ARCHIVE};
+cvar_t		cl_gun_y = {"cl_gun_y","0",CVAR_ARCHIVE};
+cvar_t		cl_gun_z = {"cl_gun_z","0",CVAR_ARCHIVE};
 
 extern	char	crosshair_char;
 extern	cvar_t	crosshair;
@@ -538,6 +542,7 @@ void SCR_Init (void)
 	//johnfitz -- new cvars
 	Cvar_RegisterVariable (&scr_menuscale);
 	Cvar_RegisterVariable (&scr_menubgalpha);
+	Cvar_RegisterVariable (&scr_menubgstyle);
 	Cvar_RegisterVariable (&scr_sbarscale);
 	Cvar_SetCallback (&scr_sbaralpha, SCR_Callback_refdef);
 	Cvar_RegisterVariable (&scr_sbaralpha);
@@ -571,6 +576,9 @@ void SCR_Init (void)
 	Cvar_RegisterVariable (&scr_printspeed);
 	Cvar_RegisterVariable (&gl_triplebuffer);
 	Cvar_RegisterVariable (&cl_gun_fovscale);
+	Cvar_RegisterVariable (&cl_gun_x);
+	Cvar_RegisterVariable (&cl_gun_y);
+	Cvar_RegisterVariable (&cl_gun_z);
 
 	Cmd_AddCommand ("scr_autoscale",SCR_AutoScale_f);
 
@@ -1042,7 +1050,7 @@ SCR_DrawCrosshair -- johnfitz
 */
 void SCR_DrawCrosshair (void)
 {
-	if (!crosshair.value || scr_viewsize.value >= 130)
+	if (cl.intermission || CL_InCutscene () || !crosshair.value || scr_viewsize.value >= 130)
 		return;
 
 	GL_SetCanvas (CANVAS_CROSSHAIR);

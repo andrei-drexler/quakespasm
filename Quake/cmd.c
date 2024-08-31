@@ -778,6 +778,8 @@ cmd_function_t *Cmd_AddCommand2 (const char *cmd_name, xcommand_t function, cmd_
 	if (host_initialized)
 	{
 		cmd = (cmd_function_t *) malloc(sizeof(*cmd) + strlen(cmd_name)+1);
+		if (!cmd)
+			Sys_Error ("Cmd_AddCommand2: out of memory (%s)", cmd_name);
 		cmd->name = strcpy((char*)(cmd + 1), cmd_name);
 		cmd->dynamic = true;
 	}

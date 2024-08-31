@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern edict_t **bbox_linked;
 
-int		type_size[8] = {
+const int type_size[NUM_TYPE_SIZES] = {
 	1,					// ev_void
 	1,	// sizeof(string_t) / 4		// ev_string
 	1,					// ev_float
@@ -35,8 +35,6 @@ int		type_size[8] = {
 	1,	// sizeof(func_t) / 4		// ev_function
 	1	// sizeof(void *) / 4		// ev_pointer
 };
-
-#define NUM_TYPE_SIZES (int)Q_COUNTOF(type_size)
 
 static ddef_t	*ED_FieldAtOfs (int ofs);
 static qboolean	ED_ParseEpair (void *base, ddef_t *key, const char *s, qboolean zoned);
@@ -181,8 +179,11 @@ Sets everything to NULL
 */
 void ED_ClearEdict (edict_t *e)
 {
+	if (!e->free)
+		SV_UnlinkEdict (e);
+	else
+		ED_RemoveFromFreeList (e);
 	memset (&e->v, 0, qcvm->progs->entityfields * 4);
-	ED_RemoveFromFreeList (e);
 }
 
 /*
@@ -262,16 +263,14 @@ ED_GlobalAtOfs
 */
 static ddef_t *ED_GlobalAtOfs (int ofs)
 {
-	ddef_t		*def;
-	int			i;
+	if (ofs < 0 || ofs > qcvm->maxglobalofs)
+		return NULL;
 
-	for (i = 0; i < qcvm->progs->numglobaldefs; i++)
-	{
-		def = &qcvm->globaldefs[i];
-		if (def->ofs == ofs)
-			return def;
-	}
-	return NULL;
+	ofs = qcvm->ofstoglobal[ofs];
+	if (ofs < 0)
+		return NULL;
+
+	return &qcvm->globaldefs[ofs];
 }
 
 /*
@@ -281,16 +280,14 @@ ED_FieldAtOfs
 */
 static ddef_t *ED_FieldAtOfs (int ofs)
 {
-	ddef_t		*def;
-	int			i;
+	if (ofs < 0 || ofs > qcvm->maxfieldofs)
+		return NULL;
 
-	for (i = 0; i < qcvm->progs->numfielddefs; i++)
-	{
-		def = &qcvm->fielddefs[i];
-		if (def->ofs == ofs)
-			return def;
-	}
-	return NULL;
+	ofs = qcvm->ofstofield[ofs];
+	if (ofs < 0)
+		return NULL;
+
+	return &qcvm->fielddefs[ofs];
 }
 
 /*
@@ -1762,6 +1759,8 @@ static void PR_MergeEngineFieldDefs (void)
 	{	//we now know how many entries we need to add...
 		ddef_t *olddefs = qcvm->fielddefs;
 		qcvm->fielddefs = malloc(maxdefs * sizeof(*qcvm->fielddefs));
+		if (!qcvm->fielddefs)
+			Sys_Error ("PR_MergeEngineFieldDefs: out of memory (%d defs)", maxdefs);
 		memcpy(qcvm->fielddefs, olddefs, qcvm->progs->numfielddefs*sizeof(*qcvm->fielddefs));
 		if (olddefs != (ddef_t *)((byte *)qcvm->progs + qcvm->progs->ofs_fielddefs))
 			free(olddefs);
@@ -1952,6 +1951,91 @@ static void PR_FindEntityFields (void)
 
 /*
 ===============
+PR_CompareFunction
+===============
+*/
+static int PR_CompareFunction (const void *pa, const void *pb)
+{
+	const dfunction_t *fa = &qcvm->functions[*(const int *)pa];
+	const dfunction_t *fb = &qcvm->functions[*(const int *)pb];
+	return fa->first_statement - fb->first_statement;
+}
+
+/*
+===============
+PR_FindFunctionRanges
+===============
+*/
+static void PR_FindFunctionRanges (void)
+{
+	int		i, mark;
+	int		*order;
+
+	qcvm->functionsizes = (int *) Hunk_AllocName (qcvm->progs->numfunctions * sizeof (*order), "func_sizes");
+	mark = Hunk_LowMark ();
+
+	order = (int *) Hunk_AllocNoFill (qcvm->progs->numfunctions * sizeof (*order));
+	for (i = 0; i < qcvm->progs->numfunctions; i++)
+		order[i] = i;
+	qsort (order, qcvm->progs->numfunctions, sizeof (*order), &PR_CompareFunction);
+
+	for (i = 0; i < qcvm->progs->numfunctions; i++)
+	{
+		dfunction_t *f = &qcvm->functions[order[i]];
+		if (f->first_statement <= 0)
+			continue;
+		if (i == qcvm->progs->numfunctions - 1)
+			qcvm->functionsizes[order[i]] = qcvm->progs->numstatements - f->first_statement;
+		else
+			qcvm->functionsizes[order[i]] = qcvm->functions[order[i + 1]].first_statement - f->first_statement;
+	}
+
+	Hunk_FreeToLowMark (mark);
+}
+
+/*
+===============
+PR_FillOffsetTables
+===============
+*/
+static void PR_FillOffsetTables (void)
+{
+	int		pass, i, maxofs, *data;
+	struct
+	{
+		int			**offsets;
+		int			*maxofs;
+		int			numdefs;
+		ddef_t		*defs;
+		const char	*allocname;
+	}
+	passes[] =
+	{
+		{ &qcvm->ofstofield,	&qcvm->maxfieldofs,		qcvm->progs->numfielddefs,	qcvm->fielddefs,	"ofstofield"	},
+		{ &qcvm->ofstoglobal,	&qcvm->maxglobalofs,	qcvm->progs->numglobaldefs,	qcvm->globaldefs,	"ofstoglobal"	},
+	};
+
+	for (pass = 0; pass < (int) Q_COUNTOF (passes); pass++)
+	{
+		// find maximum offset
+		for (i = 1, maxofs = 0; i < passes[pass].numdefs; i++)
+			maxofs = q_max (maxofs, passes[pass].defs[i].ofs);
+		*passes[pass].maxofs = maxofs;
+
+		// alloc table and fill it with -1
+		data = *passes[pass].offsets = (int *) Hunk_AllocNameNoFill ((maxofs + 1) * sizeof (int), passes[pass].allocname);
+		for (i = 0; i <= maxofs; i++)
+			data[i] = -1;
+
+		// fill actual offsets in descending order so that earlier defs are written last
+		// this preserves the behavior of ED_FieldAtOfs/ED_GlobalAtOfs, which stopped at the first match
+		for (i = passes[pass].numdefs - 1; i > 0; i--)
+			data[passes[pass].defs[i].ofs] = i;
+	}
+}
+
+/*
+===============
 PR_LoadProgs
 ===============
 */
@@ -1964,7 +2048,7 @@ qboolean PR_LoadProgs (const char *filename, qboolean fatal)
 	qcvm->progs = (dprograms_t *)COM_LoadHunkFile (filename, NULL);
 	if (!qcvm->progs)
 		return false;
-	Con_DPrintf ("Programs occupy %lliK.\n", com_filesize/1024);
+	Con_DPrintf ("Programs occupy %" SDL_PRIs64 "K.\n", com_filesize/1024);
 
 	qcvm->crc = CRC_Block (qcvm->progs, com_filesize);
 
@@ -2103,6 +2187,8 @@ qboolean PR_LoadProgs (const char *filename, qboolean fatal)
 	PR_EnableExtensions ();
 	PR_FindSavegameFields ();
 	PR_FindEntityFields ();
+	PR_FindFunctionRanges ();
+	PR_FillOffsetTables ();
 
 	qcvm->effects_mask = PR_FindSupportedEffects ();
 

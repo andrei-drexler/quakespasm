@@ -659,6 +659,8 @@ findfile_t *Sys_FindFirst (const char *dir, const char *ext)
 	}
 
 	ret = (unixfindfile_t *) calloc (1, sizeof (unixfindfile_t));
+	if (!ret)
+		Sys_Error ("Sys_FindFirst: out of memory");
 	ret->handle = handle;
 	ret->data = data;
 	q_strlcpy (ret->filter, ext, sizeof (ret->filter));
@@ -732,10 +734,15 @@ void Sys_mkdir (const char *path)
 	}
 }
 
+qboolean Sys_IsDebuggerPresent (void)
+{
+	return false;
+}
+
 static const char errortxt1[] = "\nERROR-OUT BEGIN\n\n";
 static const char errortxt2[] = "\nQUAKE ERROR: ";
 
-void Sys_Error (const char *error, ...)
+void Sys_ReportError (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
