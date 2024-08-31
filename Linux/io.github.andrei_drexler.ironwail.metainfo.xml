@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application"/>
-<application>
-  <id type="desktop">io.github.andrei-drexler.ironwail</id>
+<component type="desktop-application">
+  <id>io.github.andrei_drexler.ironwail</id>
   <name>Ironwail</name>
-  <developer_name>Andrei Drexler, Ironwail contributors</developer_name>
+  <developer id="io.github.andrei-drexler.ironwail-contributors">
+	  <name>Andrei Drexler, Ironwail Contributors</name>
+    <url>https://github.com/andrei-drexler/ironwail/graphs/contributors</url>
+  </developer>
   <summary>A modern port of the original Quake engine, focused on performance</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0-only</project_license>
+  <launchable type="desktop-id">io.github.andrei-drexler.ironwail</launchable>
   <url type="homepage">https://github.com/andrei-drexler/ironwail/</url>
   <description>
     <p>Ironwail is a fork of the popular GLQuake descendant QuakeSpasm with a focus on high performance
@@ -70,4 +73,4 @@
     <content_attribute id="violence-desecration">moderate</content_attribute>
   </content_rating>
   <update_contact>https://github.com/andrei-drexler/ironwail/issues</update_contact>
-</application>
+</component>
