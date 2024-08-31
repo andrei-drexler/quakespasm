@@ -9,7 +9,7 @@
   <summary>A modern port of the original Quake engine, focused on performance</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0-only</project_license>
-  <launchable type="desktop-id">io.github.andrei-drexler.ironwail</launchable>
+  <launchable type="desktop-id">io.github.andrei_drexler.ironwail</launchable>
   <url type="homepage">https://github.com/andrei-drexler/ironwail/</url>
   <description>
     <p>Ironwail is a fork of the popular GLQuake descendant QuakeSpasm with a focus on high performance
