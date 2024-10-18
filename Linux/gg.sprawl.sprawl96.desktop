@@ -1,9 +1,9 @@
 #!/usr/bin/env xdg-open
 [Desktop Entry]
-Name=Ironwail
-Comment=A modernised fork of the Quake engine
-Exec=ironwail
-Icon=io.github.andrei_drexler.ironwail
+Name=SPRAWL 96
+Comment=A retro shooter based on the Quake engine
+Exec=qsprawl
+Icon=gg.sprawl.sprawl96
 StartupNotify=true
 PrefersNonDefaultGPU=true
 Terminal=false
