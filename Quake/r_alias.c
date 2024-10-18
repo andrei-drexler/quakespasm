@@ -319,7 +319,7 @@ void R_FlushAliasInstances (void)
 
 	alphatest = model->flags & MF_HOLEY ? 1 : 0;
 	translucent = !ENTALPHA_OPAQUE (ibuf.ent->alpha);
-	oit = translucent && r_oit.value != 0.f;
+	oit = translucent && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
 	switch (softemu)
 	{
 	case SOFTEMU_BANDED:

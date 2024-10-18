@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "arch_def.h"
 #include "quakedef.h"
+#include "steam.h"
 
 #include <sys/types.h>
 #include <errno.h>
@@ -37,6 +38,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <time.h>
 #include <dirent.h>
 #include <pwd.h>
+#include <dlfcn.h>
 
 #if defined(SDL_FRAMEWORK) || defined(NO_SDL_CONFIG)
 #if defined(USE_SDL2)
@@ -307,10 +309,8 @@ static int Sys_NumCPUs (void)
 
 qboolean Sys_GetSteamDir (char *path, size_t pathsize)
 {
-	const char	STEAM_DIR[] = ".steam/steam";
-	const char	*home_dir = NULL;
+	const char		*home_dir = NULL;
 	struct passwd	*pwent;
-	struct stat		st;
 
 	pwent = getpwuid( getuid() );
 	if (pwent == NULL)
@@ -322,10 +322,16 @@ qboolean Sys_GetSteamDir (char *path, size_t pathsize)
 	if (home_dir == NULL)
 		return false;
 
-	if ((size_t) q_snprintf (path, pathsize, "%s/%s", home_dir, STEAM_DIR) >= pathsize)
-		return false;
+	if ((size_t) q_snprintf (path, pathsize, "%s/.steam/steam", home_dir) < pathsize && Steam_IsValidPath (path))
+		return true;
+	if ((size_t) q_snprintf (path, pathsize, "%s/.local/share/Steam", home_dir) < pathsize && Steam_IsValidPath (path))
+		return true;
+	if ((size_t) q_snprintf (path, pathsize, "%s/.var/app/com.valvesoftware.Steam/.steam/steam", home_dir) < pathsize && Steam_IsValidPath (path))
+		return true;
+	if ((size_t) q_snprintf (path, pathsize, "%s/.var/app/com.valvesoftware.Steam/.local/share/Steam", home_dir) < pathsize && Steam_IsValidPath (path))
+		return true;
 
-	return stat (path, &st) == 0 && S_ISDIR (st.st_mode);
+	return false;
 }
 
 qboolean Sys_GetSteamQuakeUserDir (char *path, size_t pathsize, const char *library)
@@ -337,6 +343,53 @@ qboolean Sys_GetSteamQuakeUserDir (char *path, size_t pathsize, const char *libr
 		return false;
 
 	return stat (path, &st) == 0 && S_ISDIR (st.st_mode);
+}
+
+qboolean Sys_GetSteamAPILibraryPath (char *path, size_t pathsize, const steamgame_t *game)
+{
+	char		config_info_path[MAX_OSPATH];
+	char		*line = NULL;
+	size_t		line_size = 0;
+	ssize_t		bytes_read = 0;
+	FILE		*config_info;
+	int			read_lines;
+	qboolean	result;
+
+	if ((size_t) q_snprintf (config_info_path, sizeof (config_info_path), "%s/steamapps/compatdata/%d/config_info", game->library, game->appid) >= pathsize)
+		return false;
+
+	config_info = Sys_fopen (config_info_path, "r");
+	if (!config_info)
+		return false;
+
+	// lib dir is on line 3, lib64 on line 4
+	read_lines = sizeof (void *) == 4 ? 3 : 4;
+	while (read_lines-- > 0)
+	{
+		if ((bytes_read = getline (&line, &line_size, config_info)) == -1)
+		{
+			fclose (config_info);
+			free (line);
+			return false;
+		}
+	}
+
+	fclose (config_info);
+	if (!line)
+		return false;
+
+	line_size = strlen (line);
+
+	if (line_size > 0 && line[line_size - 1] == '\n')
+		line[--line_size] = '\0';
+	if (line_size > 0 && line[line_size - 1] == '/')
+		line[--line_size] = '\0';
+
+	result = (size_t) q_snprintf (path, pathsize, "%s/libsteam_api.so", line) < pathsize;
+
+	free (line);
+
+	return result;
 }
 
 qboolean Sys_GetGOGQuakeDir (char *path, size_t pathsize)
@@ -692,6 +745,46 @@ void Sys_FindClose (findfile_t *find)
 	}
 }
 
+/*
+=================
+Sys_GetParentProcessName
+=================
+*/
+static qboolean Sys_GetParentProcessName (char *dst, size_t dstsize)
+{
+#ifdef __linux__
+	char link[MAX_OSPATH];
+	q_snprintf (link, sizeof (link), "/proc/%d/exe", getppid ());
+	if (readlink (link, dst, dstsize) < 0)
+		return false;
+	dst[dstsize - 1] = '\0';
+	return true;
+#else
+	return false;
+#endif
+}
+
+/*
+=================
+Sys_IsStartedFromMapEditor
+
+Returns true if the process was started from TrenchBroom
+=================
+*/
+qboolean Sys_IsStartedFromMapEditor (void)
+{
+	char path[MAX_OSPATH];
+	const char *slash, *exe;
+
+	if (!Sys_GetParentProcessName (path, sizeof (path)))
+		return false;
+
+	slash = strrchr (path, '/');
+	exe = slash ? slash + 1 : path;
+
+	return q_strcasestr (exe, "trenchbroom") != NULL || q_strcasestr (exe, "jack") != NULL;
+}
+
 void Sys_Init (void)
 {
 	const char* term = getenv("TERM");
@@ -865,4 +958,19 @@ void Sys_SendKeyEvents (void)
 
 void Sys_ActivateKeyFilter (qboolean active)
 {
+}
+
+void *Sys_LoadLibrary (const char *path)
+{
+	return dlopen (path, RTLD_LAZY);
+}
+
+void *Sys_GetLibraryFunction (void *lib, const char *func)
+{
+	return dlsym (lib, func);
+}
+
+void Sys_CloseLibrary (void *lib)
+{
+	dlclose (lib);
 }

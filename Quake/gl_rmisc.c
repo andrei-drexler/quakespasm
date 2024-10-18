@@ -58,6 +58,9 @@ qboolean use_simd;
 
 extern gltexture_t *playertextures[MAX_SCOREBOARD]; //johnfitz
 
+extern char r_showbboxes_filter_strings[MAXCMDLINE];
+extern qboolean r_showbboxes_filter_byindex;
+
 /*
 ====================
 R_ShowbboxesFilter_f
@@ -65,11 +68,10 @@ R_ShowbboxesFilter_f
 */
 static void R_ShowbboxesFilter_f (void)
 {
-	extern char r_showbboxes_filter_strings[MAXCMDLINE];
-
 	if (Cmd_Argc () >= 2)
 	{
 		int i, len, ofs;
+		r_showbboxes_filter_byindex = false;
 		for (i = 1, ofs = 0; i < Cmd_Argc (); i++)
 		{
 			const char *arg = Cmd_Argv (i);
@@ -81,6 +83,7 @@ static void R_ShowbboxesFilter_f (void)
 				Con_Warning ("overflow at \"%s\"\n", arg);
 				break;
 			}
+			r_showbboxes_filter_byindex |= (arg[0] == '#');
 			memcpy (&r_showbboxes_filter_strings[ofs], arg, len);
 			ofs += len;
 		}
@@ -99,6 +102,59 @@ static void R_ShowbboxesFilter_f (void)
 		} while (*p);
 		Con_SafePrintf ("\n");
 	}
+}
+
+/*
+====================
+R_ShowbboxesFilter_Completion_f -- tab completion for r_showbboxes_filter
+====================
+*/
+static void R_ShowbboxesFilter_Completion_f (const char *partial)
+{
+	extern edict_t *sv_player;
+	extern edict_t **bbox_linked;
+	qcvm_t	*oldvm;
+	edict_t	*ed;
+	int		i;
+
+	if (!sv.active)
+		return;
+
+	PR_PushQCVM (&sv.qcvm, &oldvm);
+
+	if (*partial == '#')
+	{
+		for (i = 0; i < (int) VEC_SIZE (bbox_linked); i++)
+		{
+			ed = bbox_linked[i];
+			Con_AddToTabList (va ("#%d", NUM_FOR_EDICT (ed)), partial, PR_GetString (ed->v.classname));
+		}
+	}
+	else
+	{
+		for (i = 1, ed = NEXT_EDICT (qcvm->edicts); i < qcvm->num_edicts; i++, ed = NEXT_EDICT (ed))
+		{
+			const char *name;
+			if (ed == sv_player || ed->free || !ed->v.classname)
+				continue;
+			name = PR_GetString (ed->v.classname);
+			if (*name)
+				Con_AddToTabList (name, partial, "#");
+		}
+	}
+
+	PR_PopQCVM (oldvm);
+}
+
+/*
+====================
+R_ShowbboxesFilterClear_f
+====================
+*/
+static void R_ShowbboxesFilterClear_f (void)
+{
+	r_showbboxes_filter_strings[0] = '\0';
+	r_showbboxes_filter_byindex = false;
 }
 
 /*
@@ -228,9 +284,14 @@ R_Init
 */
 void R_Init (void)
 {
+	cmd_function_t *cmd;
+
 	Cmd_AddCommand ("timerefresh", R_TimeRefresh_f);
 	Cmd_AddCommand ("pointfile", R_ReadPointFile_f);
-	Cmd_AddCommand ("r_showbboxes_filter", R_ShowbboxesFilter_f);
+	cmd = Cmd_AddCommand ("r_showbboxes_filter", R_ShowbboxesFilter_f);
+	if (cmd)
+		cmd->completion = R_ShowbboxesFilter_Completion_f;
+	Cmd_AddCommand ("r_showbboxes_filter_clear", R_ShowbboxesFilterClear_f);
 
 	Cvar_RegisterVariable (&r_norefresh);
 	Cvar_RegisterVariable (&r_lightmap);
@@ -463,6 +524,11 @@ void R_NewMap (void)
 	Sky_NewMap (); //johnfitz -- skybox in worldspawn
 	Fog_NewMap (); //johnfitz -- global fog in worldspawn
 	R_ParseWorldspawn (); //ericw -- wateralpha, lavaalpha, telealpha, slimealpha in worldspawn
+
+	// Load pointfile if map has no vis data and either developer mode is on or the game was started from a map editing tool
+	if (developer.value || map_checks.value)
+		if (!cl.worldmodel->visdata && COM_FileExists (va ("maps/%s.pts", cl.mapname), NULL))
+			Cbuf_AddText ("pointfile\n");
 }
 
 /*

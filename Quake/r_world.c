@@ -36,9 +36,9 @@ extern GLuint gl_bmodel_ibo;
 extern size_t gl_bmodel_ibo_size;
 extern GLuint gl_bmodel_indirect_buffer;
 extern size_t gl_bmodel_indirect_buffer_size;
-extern GLuint gl_bmodel_leaf_buffer;
 extern GLuint gl_bmodel_surf_buffer;
 extern GLuint gl_bmodel_marksurf_buffer;
+extern GLuint gl_bmodel_marksurf_buffer_size;
 
 typedef struct gpumark_frame_s {
 	vec4_t		frustum[4];
@@ -61,6 +61,7 @@ static void R_MarkVisSurfaces (byte* vis)
 	GLuint		buf;
 	GLbyte*		ofs;
 	size_t		vissize = (cl.worldmodel->numleafs + 7) >> 3;
+	size_t		nummark = gl_bmodel_marksurf_buffer_size / sizeof (bmodel_gpu_marksurf_t);
 	gpumark_frame_t frame;
 
 	GL_BeginGroup ("Mark surfaces");
@@ -91,13 +92,12 @@ static void R_MarkVisSurfaces (byte* vis)
 	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 2, gl_bmodel_ibo, 0, gl_bmodel_ibo_size);
 	GL_Upload (GL_SHADER_STORAGE_BUFFER, vis, vissize, &buf, &ofs);
 	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 3, buf, (GLintptr)ofs, vissize);
-	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 4, gl_bmodel_leaf_buffer, 0, cl.worldmodel->numleafs * sizeof(bmodel_gpu_leaf_t));
-	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 5, gl_bmodel_marksurf_buffer, 0, cl.worldmodel->nummarksurfaces * sizeof(cl.worldmodel->marksurfaces[0]));
-	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 6, gl_bmodel_surf_buffer, 0, cl.worldmodel->numsurfaces * sizeof(bmodel_gpu_surf_t));
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 4, gl_bmodel_marksurf_buffer, 0, gl_bmodel_marksurf_buffer_size);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 5, gl_bmodel_surf_buffer, 0, cl.worldmodel->numsurfaces * sizeof(bmodel_gpu_surf_t));
 	GL_Upload (GL_UNIFORM_BUFFER, &frame, sizeof(frame), &buf, &ofs);
 	GL_BindBufferRange (GL_UNIFORM_BUFFER, 1, buf, (GLintptr)ofs, sizeof(frame));
 
-	GL_DispatchComputeFunc ((cl.worldmodel->numleafs + 63) / 64, 1, 1);
+	GL_DispatchComputeFunc ((nummark + 63) / 64, 1, 1);
 	GL_MemoryBarrierFunc (GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT);
 
 	GL_EndGroup ();
@@ -308,7 +308,7 @@ static void R_AddBModelCall (int index, int first_instance, int num_instances, t
 		tx = fb = whitetexture;
 	}
 
-	if (!gl_zfix.value)
+	if (!gl_zfix.value || map_checks.value)
 		zfix = 0;
 
 	flags = zfix | ((fb != NULL) << 1) | ((r_fullbright_cheatsafe != false) << 2);
@@ -407,7 +407,7 @@ static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass
 		count = countof(bmodel_instances);
 	}
 
-	oit = translucent && r_oit.value != 0.f;
+	oit = translucent && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
 	switch (pass)
 	{
 	default:
@@ -475,6 +475,8 @@ static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass
 		entity_t *e = ents[i++];
 		qmodel_t *model = e->model;
 		qboolean isworld = (e == &cl_entities[0]);
+		qboolean isstatic = PTR_IN_RANGE (e, cl_static_entities, cl_static_entities + MAX_STATIC_ENTITIES);
+		qboolean zfix = !isworld && !isstatic;
 		int frame = isworld ? 0 : e->frame;
 		int numtex = model->texofs[texend] - model->texofs[texbegin];
 
@@ -487,7 +489,7 @@ static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass
 		for (j = model->texofs[texbegin]; j < model->texofs[texend]; j++)
 		{
 			texture_t *t = model->textures[model->usedtextures[j]];
-			R_AddBModelCall (model->firstcmd + j, baseinst, numinst, pass != BP_SHOWTRIS ? R_TextureAnimation (t, frame) : 0, !isworld);
+			R_AddBModelCall (model->firstcmd + j, baseinst, numinst, pass != BP_SHOWTRIS ? R_TextureAnimation (t, frame) : 0, zfix);
 		}
 
 		baseinst += numinst;
@@ -550,7 +552,7 @@ void R_DrawBrushModels_Water (entity_t **ents, int count, qboolean translucent)
 	else
 		state |= GLS_BLEND_OPAQUE;
 
-	oit = translucent && r_oit.value != 0.f;
+	oit = translucent && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
 	if (cl.worldmodel->haslitwater && r_litwater.value)
 		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_WATER];
 	else
@@ -661,7 +663,7 @@ void R_DrawBrushModels (entity_t **ents, int count)
 	if (!count)
 		return;
 	translucent = (ents[0] != &cl_entities[0]) && !ENTALPHA_OPAQUE (ents[0]->alpha);
-	if (!translucent || r_oit.value)
+	if (!translucent || R_GetEffectiveAlphaMode () == ALPHAMODE_OIT)
 	{
 		R_DrawBrushModels_Real (ents, count, BP_SOLID, translucent);
 		R_DrawBrushModels_Real (ents, count, BP_ALPHATEST, translucent);

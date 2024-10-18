@@ -1701,6 +1701,201 @@ void SV_SaveSpawnparms (void)
 	}
 }
 
+typedef enum
+{
+	MAPCHECK_FAILED,
+	MAPCHECK_PARTIAL,
+	MAPCHECK_OK,
+} mapcheck_t;
+
+
+/*
+================
+SV_MapCheckThresh
+================
+*/
+static mapcheck_t SV_MapCheckThresh (int current, int target)
+{
+	if (current <= 0)
+		return MAPCHECK_FAILED;
+	if (current >= target)
+		return MAPCHECK_OK;
+	return MAPCHECK_PARTIAL;
+}
+
+/*
+================
+SV_PrintMapCheck
+================
+*/
+static void SV_PrintMapCheck (mapcheck_t status, const char *format, ...)
+{
+	char		str[1024];
+	char		tinted[1024];
+	va_list		argptr;
+
+	va_start (argptr, format);
+	q_vsnprintf (str, sizeof (str), format, argptr);
+	va_end (argptr);
+
+	if (status == MAPCHECK_OK)
+	{
+		Con_SafePrintf ("[x] %s\n", str);
+	}
+	else
+	{
+		Con_SafePrintf ("\xDB%c\xDD %s\n", status == MAPCHECK_PARTIAL ? '-' ^ 0x80 : ' ', COM_TintString (str, tinted, sizeof (tinted)));
+		sv.mapchecks.numwarnings++;
+	}
+}
+
+
+/*
+================
+SV_PrintMapChecklist
+================
+*/
+static void SV_PrintMapChecklist (void)
+{
+	const int	MIN_DM_SPAWN_POINTS = 5;
+	const int	MIN_COOP_SPAWN_POINTS = 3;
+
+	qboolean	skill_levels;
+	char		buf[1024];
+	int			i, track, numskies, count;
+
+	//
+	// header
+	//
+	Con_SafePrintf ("\n");
+	Con_SafePrintf ("=====================================\n");
+	Con_SafePrintf ("\n");
+	Con_SafePrintf ("Map checklist (%s):\n\n", COM_SkipPath (sv.modelname));
+
+	//
+	// light data
+	//
+	SV_PrintMapCheck (sv.worldmodel->lightdata != NULL ? MAPCHECK_OK : MAPCHECK_FAILED, "lightmap data");
+
+	//
+	// vis data
+	//
+	if (!sv.worldmodel->visdata)
+	{
+		char pointfile[MAX_OSPATH];
+		q_snprintf (pointfile, sizeof (pointfile), "maps/%s.pts", sv.name);
+		if (COM_FileExists (pointfile, NULL))
+			SV_PrintMapCheck (MAPCHECK_FAILED, "vis data (unsealed map?)");
+		else
+			SV_PrintMapCheck (MAPCHECK_FAILED, "vis data");
+	}
+	else
+		SV_PrintMapCheck (MAPCHECK_OK, "vis data");
+
+	//
+	// changelevel trigger
+	//
+	if (!sv.mapchecks.trigger_changelevel)
+		SV_PrintMapCheck (MAPCHECK_FAILED, "trigger_changelevel");
+	else if (sv.mapchecks.trigger_changelevel == 1)
+	{
+		if (sv.mapchecks.valid_changelevel == sv.mapchecks.trigger_changelevel)
+			SV_PrintMapCheck (MAPCHECK_OK, "trigger_changelevel (%s)", sv.mapchecks.changelevel);
+		else
+			SV_PrintMapCheck (MAPCHECK_PARTIAL, "trigger_changelevel (missing \"map\" key)");
+	}
+	else
+	{
+		if (sv.mapchecks.valid_changelevel == sv.mapchecks.trigger_changelevel)
+			SV_PrintMapCheck (MAPCHECK_OK, "trigger_changelevel (%d)", sv.mapchecks.trigger_changelevel);
+		else
+			SV_PrintMapCheck (MAPCHECK_PARTIAL, "trigger_changelevel (%d/%d missing \"map\" key)",
+				sv.mapchecks.trigger_changelevel - sv.mapchecks.valid_changelevel,
+				sv.mapchecks.trigger_changelevel
+			);
+	}
+
+	//
+	// intermission camera
+	//
+	if (!sv.mapchecks.intermission)
+		SV_PrintMapCheck (MAPCHECK_FAILED, "info_intermission");
+	else
+		SV_PrintMapCheck (MAPCHECK_OK, "info_intermission (%d)", sv.mapchecks.intermission);
+
+	//
+	// skill levels
+	//
+	skill_levels = sv.mapchecks.skill_triggers > 0 ||
+		(sv.mapchecks.skill_ents[0] != sv.mapchecks.skill_ents[1] || sv.mapchecks.skill_ents[1] != sv.mapchecks.skill_ents[2]);
+	SV_PrintMapCheck (skill_levels ? MAPCHECK_OK : MAPCHECK_FAILED, "skill spawnflags/triggers");
+
+	//
+	// coop spawn points
+	//
+	SV_PrintMapCheck (SV_MapCheckThresh (sv.mapchecks.coop_spawns, MIN_COOP_SPAWN_POINTS),
+		"info_player_coop (%d/%d+)", sv.mapchecks.coop_spawns, MIN_COOP_SPAWN_POINTS);
+
+	//
+	// deathmatch spawn points
+	//
+	SV_PrintMapCheck (SV_MapCheckThresh (sv.mapchecks.dm_spawns, MIN_DM_SPAWN_POINTS),
+		"info_player_deathmatch (%d/%d+)", sv.mapchecks.dm_spawns, MIN_DM_SPAWN_POINTS);
+
+	//
+	// music track
+	//
+	track = (int)qcvm->edicts->v.sounds;
+	if (track == 0)
+		SV_PrintMapCheck (MAPCHECK_FAILED, "music track (worldspawn \"sounds\" field)");
+	else if (track < 2 || track > 255) 
+		SV_PrintMapCheck (MAPCHECK_FAILED, "music track (%d, should be between 2 and 255)");
+	else
+		SV_PrintMapCheck (MAPCHECK_OK, "music track (%d)", track);
+
+	//
+	// map title
+	//
+	Mod_SanitizeMapDescription (buf, sizeof (buf), PR_GetString ((int)qcvm->edicts->v.message));
+	if (buf[0])
+		SV_PrintMapCheck (MAPCHECK_OK, "map title (%s)", buf);
+	else
+		SV_PrintMapCheck (MAPCHECK_FAILED, "map title (worldspawn \"message\" field)");
+
+	//
+	// warn about multiple skies (e.g. "Slip Tripping" / markiesm1.bsp), of which only the last would get rendered in other engines,
+	// and sky textures with non-standard sizes (e.g. "Tears of the False God" / ad_tears.bsp), which could even crash older engines 
+	//
+	numskies = sv.worldmodel->texofs[(int)TEXTYPE_SKY + 1] - sv.worldmodel->texofs[TEXTYPE_SKY];
+	count = 0;
+	for (i = 0; i < numskies; i++)
+	{
+		texture_t *tex = sv.worldmodel->textures[sv.worldmodel->usedtextures[sv.worldmodel->texofs[TEXTYPE_SKY] + i]];
+		if (tex->width != 256 || tex->height != 128)
+			count++;
+	}
+	if (numskies > 1 || count > 0)
+	{
+		SV_PrintMapCheck (MAPCHECK_FAILED, "compat: single %ssky texture (%d found)", count > 0 ? "256 x 128 " : "", numskies);
+		for (i = 0; i < numskies; i++)
+		{
+			texture_t *tex = sv.worldmodel->textures[sv.worldmodel->usedtextures[sv.worldmodel->texofs[TEXTYPE_SKY] + i]];
+			if (tex->width != 256 || tex->height != 128)
+				q_snprintf (buf, sizeof (buf), " (%d x %d)", tex->width, tex->height);
+			else
+				buf[0] = '\0';
+			Con_SafePrintf ("\x02    %d. %s%s\n", i + 1, tex->name, buf);
+		}
+	}
+
+	//
+	// footer
+	//
+	Con_SafePrintf ("\n");
+	Con_SafePrintf ("=====================================\n");
+	Con_SafePrintf ("\n");
+}
+
 
 /*
 ================
@@ -1755,6 +1950,8 @@ void SV_SpawnServer (const char *server)
 	Host_ClearMemory ();
 
 	q_strlcpy (sv.name, server, sizeof(sv.name));
+	if (developer.value || map_checks.value)
+		sv.mapchecks.active = true;
 
 	sv.protocol = sv_protocol; // johnfitz
 	
@@ -1878,5 +2075,8 @@ void SV_SpawnServer (const char *server)
 			SV_SendServerinfo (host_client);
 
 	Con_DPrintf ("Server spawned.\n");
+
+	if (sv.mapchecks.active)
+		SV_PrintMapChecklist ();
 }
 

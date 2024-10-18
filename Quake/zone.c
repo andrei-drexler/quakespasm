@@ -670,7 +670,7 @@ void Hunk_FreeToLowMark (int mark)
 char *Hunk_Strdup (const char *s, const char *name)
 {
 	size_t sz = strlen(s) + 1;
-	char *ptr = (char *) Hunk_AllocName (sz, name);
+	char *ptr = (char *) Hunk_AllocNameNoFill (sz, name);
 	memcpy (ptr, s, sz);
 	return ptr;
 }

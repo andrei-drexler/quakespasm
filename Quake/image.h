@@ -29,6 +29,8 @@ enum srcformat;
 //be sure to free the hunk after using this loading function
 byte *Image_LoadImage (const char *name, int *width, int *height, enum srcformat *fmt);
 
+byte* Image_CopyFlipped (const void *src, int width, int height, int bpp);
+
 qboolean Image_WriteTGA (const char *name, byte *data, int width, int height, int bpp, qboolean upsidedown);
 qboolean Image_WritePNG (const char *name, byte *data, int width, int height, int bpp, qboolean upsidedown);
 qboolean Image_WriteJPG (const char *name, byte *data, int width, int height, int bpp, int quality, qboolean upsidedown);

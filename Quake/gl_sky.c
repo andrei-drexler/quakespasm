@@ -74,7 +74,7 @@ void Sky_LoadTexture (qmodel_t *mod, texture_t *mt)
 
 	if (mt->width != 256 || mt->height != 128)
 	{
-		Con_Warning ("Sky texture %s is %d x %d, expected 256 x 128\n", mt->name, mt->width, mt->height);
+		Con_DWarning ("Sky texture %s is %d x %d, expected 256 x 128\n", mt->name, mt->width, mt->height);
 		if (mt->width < 2 || mt->height < 1)
 			return;
 	}

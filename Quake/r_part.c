@@ -734,7 +734,6 @@ static void R_DrawParticles_Real (qboolean alpha, qboolean showtris)
 	particlevert_t	*v;
 	GLubyte			color[4] = {255, 255, 255, 255}, *c; //johnfitz -- particle transparency
 	extern	cvar_t	r_particles; //johnfitz
-	extern	cvar_t	r_oit;
 	//float			alpha; //johnfitz -- particle transparency
 	float			scalex, scaley;
 	qboolean		dither, oit;
@@ -753,7 +752,7 @@ static void R_DrawParticles_Real (qboolean alpha, qboolean showtris)
 	GL_BeginGroup ("Particles");
 
 	dither = (softemu == SOFTEMU_COARSE && !showtris);
-	oit = (alpha && r_oit.value != 0.f);
+	oit = (alpha && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT);
 	GL_UseProgram (glprogs.particles[oit][dither]);
 
 	// compensate for apparent size of different particle textures

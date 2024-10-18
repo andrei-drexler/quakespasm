@@ -813,8 +813,9 @@ void CL_PlayDemo_f (void)
 	cls.demofilestart = Sys_ftell (cls.demofile);
 	cls.demofilesize = com_filesize;
 
-// get rid of the menu and/or console
-	key_dest = key_game;
+// if this is a player-initiated demo, get rid of the console
+	if (cls.demonum == -1 && key_dest == key_console)
+		key_dest = key_game;
 }
 
 /*

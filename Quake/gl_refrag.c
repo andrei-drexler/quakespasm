@@ -180,7 +180,7 @@ void R_AddStaticModels (const byte *vis)
 	}
 
 	// reverse order to match QS, if needed
-	if (!r_oit.value && !r_alphasort.value)
+	if (R_GetEffectiveAlphaMode () == ALPHAMODE_BASIC)
 	{
 		int count = cl_numvisedicts - start;
 		int half = count / 2;

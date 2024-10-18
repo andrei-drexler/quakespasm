@@ -137,6 +137,8 @@ typedef struct glvert_s {
 typedef struct msurface_s
 {
 	mplane_t	*plane;
+	float		mins[3];		// johnfitz -- for frustum culling
+	float		maxs[3];		// johnfitz -- for frustum culling
 	int			flags;
 
 	int			vbo_firstvert;		// index of this surface's first vert in the VBO

@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // screen.c -- master for refresh, status bar, console, chat, notify, etc
 
 #include "quakedef.h"
+#include "steam.h"
 #include <time.h>
 
 /*
@@ -82,6 +83,7 @@ float		scr_conlines;		// lines of console to display
 cvar_t		scr_menuscale = {"scr_menuscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_menubgalpha = {"scr_menubgalpha", "0.7", CVAR_ARCHIVE};
 cvar_t		scr_menubgstyle = {"scr_menubgstyle", "-1", CVAR_ARCHIVE};
+cvar_t		scr_centerprintbg = {"scr_centerprintbg", "0", CVAR_ARCHIVE}; // 0 = off; 1 = text box; 2 = menu box; 3 = menu strip
 cvar_t		scr_sbarscale = {"scr_sbarscale", "1", CVAR_ARCHIVE};
 cvar_t		scr_sbaralpha = {"scr_sbaralpha", "0.75", CVAR_ARCHIVE};
 cvar_t		scr_conwidth = {"scr_conwidth", "0", CVAR_ARCHIVE};
@@ -155,6 +157,7 @@ char		scr_centerstring[1024];
 float		scr_centertime_start;	// for slow victory printing
 float		scr_centertime_off;
 int			scr_center_lines;
+int			scr_center_maxcols;
 int			scr_erase_lines;
 int			scr_erase_center;
 
@@ -168,7 +171,16 @@ for a few moments
 */
 void SCR_CenterPrint (const char *str) //update centerprint data
 {
-	strncpy (scr_centerstring, str, sizeof(scr_centerstring)-1);
+	int cols;
+
+	q_strlcpy (scr_centerstring, str, sizeof (scr_centerstring));
+	if (!scr_centerstring[0])
+	{
+		scr_center_lines = 0;
+		scr_center_maxcols = 0;
+		return;
+	}
+
 	scr_centertime_off = scr_centertime.value;
 	scr_centertime_start = cl.time;
 	if (!cl.intermission)
@@ -176,12 +188,72 @@ void SCR_CenterPrint (const char *str) //update centerprint data
 
 // count the number of lines for centering
 	scr_center_lines = 1;
+	scr_center_maxcols = 0;
 	str = scr_centerstring;
+	cols = 0;
 	while (*str)
 	{
 		if (*str == '\n')
+		{
 			scr_center_lines++;
+			scr_center_maxcols = q_max (scr_center_maxcols, cols);
+			cols = -1; // compensate the following ++
+		}
 		str++;
+		cols++;
+	}
+	scr_center_maxcols = q_max (scr_center_maxcols, cols);
+}
+
+static void SCR_DrawCenterStringBG (int y, float alpha)
+{
+	const char *str;
+	int i, len, lines, x;
+
+	if (cl.intermission || q_min (scr_center_lines, scr_center_maxcols) <= 0 || alpha <= 0.f)
+		return;
+
+	// skip leading empty lines (might be there just to reposition the text)
+	str = scr_centerstring;
+	while (*str == '\n')
+	{
+		str++;
+		y += CHARSIZE;
+	}
+
+	// skip trailing empty lines
+	len = (int) strlen (str);
+	while (len > 0 && str[len - 1] == '\n')
+		--len;
+
+	// count remaining lines
+	for (i = 0, lines = 1; i < len; i++)
+		if (str[i] == '\n')
+			lines++;
+
+	// draw the background
+	switch ((int)scr_centerprintbg.value)
+	{
+	case 1:
+		len = (scr_center_maxcols + 3) & ~1;
+		x = (320 - len * 8) / 2;
+		GL_PushCanvasColor (1.f, 1.f, 1.f, alpha * scr_menubgalpha.value);
+		M_DrawTextBox (x - 8, y - 12, len, lines + 1);
+		GL_PopCanvasColor ();
+		break;
+
+	case 2:
+		len = scr_center_maxcols + 2;
+		x = (320 - len* 8) / 2;
+		Draw_PartialFadeScreen (x, x + len * 8, y - 4, y + lines * 8 + 4, alpha);
+		break;
+
+	case 3:
+		Draw_PartialFadeScreen (glcanvas.left, glcanvas.right, y - 4, y + lines * 8 + 4, alpha);
+		break;
+
+	default:
+		return;
 	}
 }
 
@@ -192,7 +264,7 @@ void SCR_DrawCenterString (void) //actually do the drawing
 	int		j;
 	int		x, y;
 	int		remaining;
-	float	alpha;
+	float	alpha, forcedalpha;
 
 	GL_SetCanvas (CANVAS_MENU); //johnfitz
 
@@ -209,7 +281,10 @@ void SCR_DrawCenterString (void) //actually do the drawing
 		alpha = fade ? q_min (scr_centertime_off / fade, 1.f) : 1.f;
 	}
 
-	GL_SetCanvasColor (1.f, 1.f, 1.f, alpha);
+	if (M_ForcedCenterPrint (&forcedalpha))
+		alpha *= forcedalpha * forcedalpha;
+
+	GL_PushCanvasColor (1.f, 1.f, 1.f, alpha);
 
 	scr_erase_center = 0;
 	start = scr_centerstring;
@@ -220,6 +295,8 @@ void SCR_DrawCenterString (void) //actually do the drawing
 		y = 48;
 	if (crosshair.value && scr_viewsize.value < 130)
 		y -= 8;
+
+	SCR_DrawCenterStringBG (y, alpha);
 
 	do
 	{
@@ -243,7 +320,7 @@ void SCR_DrawCenterString (void) //actually do the drawing
 		start++;		// skip the \n
 	} while (1);
 
-	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	GL_PopCanvasColor ();
 }
 
 void SCR_CheckDrawCenterString (void)
@@ -255,10 +332,13 @@ void SCR_CheckDrawCenterString (void)
 
 	if (scr_centertime_off <= 0 && !cl.intermission)
 		return;
-	if (key_dest != key_game)
-		return;
-	if (cl.paused) //johnfitz -- don't show centerprint during a pause
-		return;
+	if (!M_ForcedCenterPrint (NULL))
+	{
+		if (key_dest != key_game)
+			return;
+		if (cl.paused) //johnfitz -- don't show centerprint during a pause
+			return;
+	}
 
 	SCR_DrawCenterString ();
 }
@@ -310,7 +390,8 @@ SCR_UpdateZoom
 */
 void SCR_UpdateZoom (void)
 {
-	float delta = cl.zoomdir * scr_zoomspeed.value * (cl.time - cl.oldtime);
+	float speed = scr_zoomspeed.value > 0.f ? scr_zoomspeed.value : 1e6;
+	float delta = cl.zoomdir * speed * (cl.time - cl.oldtime);
 	if (!delta)
 		return;
 	cl.zoom += delta;
@@ -543,6 +624,7 @@ void SCR_Init (void)
 	Cvar_RegisterVariable (&scr_menuscale);
 	Cvar_RegisterVariable (&scr_menubgalpha);
 	Cvar_RegisterVariable (&scr_menubgstyle);
+	Cvar_RegisterVariable (&scr_centerprintbg);
 	Cvar_RegisterVariable (&scr_sbarscale);
 	Cvar_SetCallback (&scr_sbaralpha, SCR_Callback_refdef);
 	Cvar_RegisterVariable (&scr_sbaralpha);
@@ -981,6 +1063,7 @@ DrawPause
 void SCR_DrawPause (void)
 {
 	qpic_t	*pic;
+	float	alpha;
 
 	if (!cl.paused)
 		return;
@@ -988,10 +1071,22 @@ void SCR_DrawPause (void)
 	if (!scr_showpause.value)		// turn off for screenshots
 		return;
 
+	if (M_ForcedCenterPrint (&alpha))
+	{
+		alpha = 1.f - alpha;
+		if (alpha <= 0.f)
+			return;
+	}
+	else
+		alpha = 1.f;
+
 	GL_SetCanvas (CANVAS_MENU); //johnfitz
+	GL_PushCanvasColor (1.f, 1.f, 1.f, alpha);
 
 	pic = Draw_CachePic ("gfx/pause.lmp");
 	Draw_Pic ( (320 - pic->width)/2, (240 - 48 - pic->height)/2, pic); //johnfitz -- stretched menus
+
+	GL_PopCanvasColor ();
 
 	scr_tileclear_updates = 0; //johnfitz
 }
@@ -1252,7 +1347,7 @@ void SCR_DrawEdictInfo (void)
 	if (VEC_SIZE (bbox_linked) == 0)
 		return;
 
-	GL_SetCanvas (CANVAS_MENU);
+	GL_SetCanvas (CANVAS_BOTTOMRIGHT);
 	SCR_SetupProjToCanvasMap (&proj2canvas);
 
 	PR_SwitchQCVM (&sv.qcvm);
@@ -1338,12 +1433,23 @@ void SCR_DrawEdictInfo (void)
 		// Add all relevant fields, excluding classname (already added to the header)
 		for (i = 1; i < qcvm->progs->numfielddefs; i++)
 		{
-			ddef_t *d = &qcvm->fielddefs[i];
+			stringview_t	line;
+			const char		*val;
+			ddef_t			*d = &qcvm->fielddefs[i];
+
 			if (d->ofs*4 == offsetof (entvars_t, classname) || !ED_IsRelevantField (ed, d))
 				continue;
+
 			COM_TintString (PR_GetString (d->s_name), tinted, sizeof (tinted));
-			MultiString_Append (&scr_edictoverlaystrings, tinted);
-			MultiString_Append (&scr_edictoverlaystrings, ED_FieldValueString (ed, d));
+			val = ED_FieldValueString (ed, d);
+
+			while (COM_ParseLine (&val, &line))
+			{
+				MultiString_Append (&scr_edictoverlaystrings, tinted);
+				MultiString_AppendN (&scr_edictoverlaystrings, line.data, line.len);
+				tinted[0] = ' ';
+				tinted[1] = '\0';
+			}
 		}
 
 		SCR_DrawKeyValueOverlay (x, y, scr_edictoverlaystrings, rgb_black);
@@ -1381,13 +1487,17 @@ void SCR_SetUpToDrawConsole (void)
 		scr_conlines = glheight; //full screen //johnfitz -- glheight instead of vid.height
 		scr_con_current = scr_conlines;
 	}
-	else if (key_dest == key_console)
+	else if (key_dest == key_console || M_WantsConsole (NULL))
 		scr_conlines = glheight/2; //half screen //johnfitz -- glheight instead of vid.height
 	else
 		scr_conlines = 0; //none visible
 
 	timescale = (host_timescale.value > 0) ? host_timescale.value : 1; //johnfitz -- timescale
-	conspeed = (scr_conspeed.value > 0) ? scr_conspeed.value : 1e6f;
+	conspeed = (scr_conspeed.value > 0 && !cls.timedemo) ? scr_conspeed.value : 1e6f;
+
+	// make sure the console isn't too slow to come down if we're forcing it open to preview a specific option
+	if (key_dest == key_menu)
+		conspeed = q_max (conspeed, 2000.f);
 
 	if (scr_conlines < scr_con_current)
 	{
@@ -1420,7 +1530,10 @@ void SCR_DrawConsole (void)
 {
 	if (scr_con_current)
 	{
-		Con_DrawConsole (scr_con_current, true);
+		if (key_dest != key_menu || (!con_forcedup || M_WantsConsole (NULL)))
+			Con_DrawConsole (scr_con_current, true, key_dest == key_console);
+		else
+			Draw_ConsoleBackground ();
 		clearconsole = 0;
 	}
 	else
@@ -1608,18 +1721,14 @@ static void SCR_ScreenShot_Usage (void)
 
 /*
 ==================
-SCR_ScreenShot_f -- johnfitz -- rewritten to use Image_WriteTGA
+SCR_ScreenShot_f
 ==================
 */
 void SCR_ScreenShot_f (void)
 {
 	byte	*buffer;
 	char	ext[4];
-	char	basename[MAX_OSPATH];
-	char	imagename[MAX_OSPATH];
-	char	checkname[MAX_OSPATH];
 	int		i, quality;
-	qboolean	ok, has_vars;
 
 	Q_strncpy (ext, "png", sizeof(ext));
 
@@ -1648,41 +1757,6 @@ void SCR_ScreenShot_f (void)
 		return;
 	}
 
-// find a file name to save it to
-	has_vars = SCR_ExpandVariables (cl_screenshotname.string, basename, sizeof (basename));
-	if (!basename[0])
-		q_strlcpy (basename, SCREENSHOT_PREFIX, sizeof (basename));
-
-	if (!has_vars)
-		goto append_index;
-
-	q_snprintf (imagename, sizeof (imagename), "%s.%s", basename, ext);
-	q_snprintf (checkname, sizeof (checkname), "%s/%s", com_gamedir, imagename);
-	if (Sys_FileType (checkname) != FS_ENT_NONE) // base name already used, try appending an index
-	{
-	append_index:
-		// append underscore if basename ends with a digit
-		i = (int) strlen (basename);
-		if (i && i + 1 < (int) countof (basename) && (unsigned int)(basename[i - 1] - '0') < 10u)
-		{
-			basename[i] = '_';
-			basename[i + 1] = '\0';
-		}
-
-		for (i = has_vars; i < 10000; i++)
-		{
-			q_snprintf (imagename, sizeof (imagename), "%s%04i.%s", basename, i, ext);
-			q_snprintf (checkname, sizeof (checkname), "%s/%s", com_gamedir, imagename);
-			if (Sys_FileType (checkname) == FS_ENT_NONE)
-				break;	// file doesn't exist
-		}
-		if (i == 10000)
-		{
-			Con_Printf ("SCR_ScreenShot_f: Couldn't find an unused filename\n");
-			return;
-		}
-	}
-
 //get data
 	if (!(buffer = (byte *) malloc(glwidth*glheight*3)))
 	{
@@ -1704,24 +1778,68 @@ void SCR_ScreenShot_f (void)
 	glReadPixels (glx, gly, glwidth, glheight, GL_RGB, GL_UNSIGNED_BYTE, buffer);
 
 // now write the file
-	if (!q_strncasecmp (ext, "png", sizeof(ext)))
-		ok = Image_WritePNG (imagename, buffer, glwidth, glheight, 24, false);
-	else if (!q_strncasecmp (ext, "tga", sizeof(ext)))
-		ok = Image_WriteTGA (imagename, buffer, glwidth, glheight, 24, false);
-	else if (!q_strncasecmp (ext, "jpg", sizeof(ext)))
-		ok = Image_WriteJPG (imagename, buffer, glwidth, glheight, 24, quality, false);
-	else
-		ok = false;
-
-	UTF8_ToQuake (basename, sizeof (basename), imagename);
-	if (ok)
+	if (!Steam_SaveScreenshot (buffer, glwidth, glheight))
 	{
-		Con_SafePrintf ("Wrote ");
-		Con_LinkPrintf (va("%s/%s", com_gamedir, imagename), "%s", basename);
-		Con_SafePrintf ("\n");
+		char		basename[MAX_OSPATH];
+		char		imagename[MAX_OSPATH];
+		char		checkname[MAX_OSPATH];
+		qboolean	ok, has_vars;
+
+	// find a file name to save it to
+		has_vars = SCR_ExpandVariables (cl_screenshotname.string, basename, sizeof (basename));
+		if (!basename[0])
+			q_strlcpy (basename, SCREENSHOT_PREFIX, sizeof (basename));
+
+		if (!has_vars)
+			goto append_index;
+
+		q_snprintf (imagename, sizeof (imagename), "%s.%s", basename, ext);
+		q_snprintf (checkname, sizeof (checkname), "%s/%s", com_gamedir, imagename);
+		if (Sys_FileType (checkname) != FS_ENT_NONE) // base name already used, try appending an index
+		{
+		append_index:
+			// append underscore if basename ends with a digit
+			i = (int) strlen (basename);
+			if (i && i + 1 < (int) countof (basename) && (unsigned int)(basename[i - 1] - '0') < 10u)
+			{
+				basename[i] = '_';
+				basename[i + 1] = '\0';
+			}
+
+			for (i = has_vars; i < 10000; i++)
+			{
+				q_snprintf (imagename, sizeof (imagename), "%s%04i.%s", basename, i, ext);
+				q_snprintf (checkname, sizeof (checkname), "%s/%s", com_gamedir, imagename);
+				if (Sys_FileType (checkname) == FS_ENT_NONE)
+					break;	// file doesn't exist
+			}
+			if (i == 10000)
+			{
+				Con_Printf ("SCR_ScreenShot_f: Couldn't find an unused filename\n");
+				free (buffer);
+				return;
+			}
+		}
+
+		if (!q_strncasecmp (ext, "png", sizeof(ext)))
+			ok = Image_WritePNG (imagename, buffer, glwidth, glheight, 24, false);
+		else if (!q_strncasecmp (ext, "tga", sizeof(ext)))
+			ok = Image_WriteTGA (imagename, buffer, glwidth, glheight, 24, false);
+		else if (!q_strncasecmp (ext, "jpg", sizeof(ext)))
+			ok = Image_WriteJPG (imagename, buffer, glwidth, glheight, 24, quality, false);
+		else
+			ok = false;
+
+		UTF8_ToQuake (basename, sizeof (basename), imagename);
+		if (ok)
+		{
+			Con_SafePrintf ("Wrote ");
+			Con_LinkPrintf (va("%s/%s", com_gamedir, imagename), "%s", basename);
+			Con_SafePrintf ("\n");
+		}
+		else
+			Con_Printf ("SCR_ScreenShot_f: Couldn't create %s\n", basename);
 	}
-	else
-		Con_Printf ("SCR_ScreenShot_f: Couldn't create %s\n", basename);
 
 	free (buffer);
 }
@@ -1749,7 +1867,9 @@ void SCR_BeginLoadingPlaque (void)
 	if (key_dest != key_console)
 	{
 		Con_ClearNotify ();
-		scr_con_current = 0;
+		// don't reset console when advancing to a new demo while previewing a console option
+		if (!M_WantsConsole (NULL))
+			scr_con_current = 0;
 		scr_drawloading = true;
 	}
 
@@ -1976,13 +2096,14 @@ void SCR_UpdateScreen (void)
 			Draw_ConsoleBackground ();
 		else
 			Sbar_Draw ();
-		Draw_FadeScreen ();
+		Draw_FadeScreen (1.f);
 		SCR_DrawNotifyString ();
 	}
 	else if (scr_drawloading) //loading
 	{
 		SCR_DrawLoading ();
 		Sbar_Draw ();
+		M_Draw ();
 	}
 	else if (cl.intermission == 1 && key_dest == key_game) //end of level
 	{

@@ -36,6 +36,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  pragma warning(disable:4267)
 	/* 'var'	: conversion from 'size_t' to 'type',
 			  possible loss of data (/Wp64 warning) */
+#  pragma warning(error:4431)
+	/* missing type specifier - int assumed */
 #endif	/* _MSC_VER */
 #endif	/* _WIN32 */
 
@@ -171,6 +173,7 @@ void Vec_Clear (void **pvec);
 void Vec_Free (void **pvec);
 
 void MultiString_Append (char **pvec, const char *str);
+void MultiString_AppendN (char **pvec, const char *str, size_t len);
 
 //============================================================================
 
@@ -291,6 +294,13 @@ typedef enum
 const char *COM_Parse (const char *data);
 const char *COM_ParseEx (const char *data, cpe_mode mode);
 
+typedef struct
+{
+	const char	*data;
+	size_t		len;
+} stringview_t;
+
+qboolean COM_ParseLine (const char **str, stringview_t *line);
 
 extern	int			com_argc;
 extern	const char	**com_argv;
@@ -313,6 +323,7 @@ void COM_AddGameDirectory (const char *dir);
 void COM_SwitchGame (const char *paths);
 
 const char *COM_SkipPath (const char *pathname);
+const char *COM_SkipSpace (const char *str);
 void COM_StripExtension (const char *in, char *out, size_t outsize);
 void COM_FileBase (const char *in, char *out, size_t outsize);
 void COM_AddExtension (char *path, const char *extension, size_t len);

@@ -541,9 +541,9 @@ GLuint gl_bmodel_ibo = 0;
 size_t gl_bmodel_ibo_size = 0;
 GLuint gl_bmodel_indirect_buffer = 0;
 size_t gl_bmodel_indirect_buffer_size = 0;
-GLuint gl_bmodel_leaf_buffer = 0;
 GLuint gl_bmodel_surf_buffer = 0;
 GLuint gl_bmodel_marksurf_buffer = 0;
+GLuint gl_bmodel_marksurf_buffer_size = 0;
 
 /*
 ==================
@@ -555,7 +555,6 @@ void GL_DeleteBModelBuffers (void)
 	GL_DeleteBuffer (gl_bmodel_vbo);
 	GL_DeleteBuffer (gl_bmodel_ibo);
 	GL_DeleteBuffer (gl_bmodel_indirect_buffer);
-	GL_DeleteBuffer (gl_bmodel_leaf_buffer);
 	GL_DeleteBuffer (gl_bmodel_surf_buffer);
 	GL_DeleteBuffer (gl_bmodel_marksurf_buffer);
 	gl_bmodel_vbo = 0;
@@ -564,9 +563,9 @@ void GL_DeleteBModelBuffers (void)
 	gl_bmodel_ibo_size = 0;
 	gl_bmodel_indirect_buffer = 0;
 	gl_bmodel_indirect_buffer_size = 0;
-	gl_bmodel_leaf_buffer = 0;
 	gl_bmodel_surf_buffer = 0;
 	gl_bmodel_marksurf_buffer = 0;
+	gl_bmodel_marksurf_buffer_size = 0;
 }
 
 /*
@@ -736,17 +735,29 @@ void GL_BuildBModelVertexBuffer (void)
 
 /*
 ===============
+CompareMarkSurface
+===============
+*/
+static int CompareMarkSurface (const void *pa, const void *pb)
+{
+	msurface_t *sa = &cl.worldmodel->surfaces[((bmodel_gpu_marksurf_t *)pa)->surfindex];
+	msurface_t *sb = &cl.worldmodel->surfaces[((bmodel_gpu_marksurf_t *)pb)->surfindex];
+	return sb->numedges - sa->numedges;
+}
+
+/*
+===============
 GL_BuildBModelMarkBuffers
 ===============
 */
 void GL_BuildBModelMarkBuffers (void)
 {
 	int			i, j, k, sum;
-	int			numtex = 0, numtris = 0, maxnumtex = 0;
+	int			numtex = 0, numtris = 0, maxnumtex = 0, nummark = 0;
 	int			*texidx = NULL;
 	GLuint		*idx;
+	bmodel_gpu_marksurf_t *mark;
 	bmodel_draw_indirect_t *cmds;
-	bmodel_gpu_leaf_t *leafs;
 	bmodel_gpu_surf_t *surfs;
 
 	if (!cl.worldmodel)
@@ -765,18 +776,23 @@ void GL_BuildBModelMarkBuffers (void)
 			numtris += q_max (m->surfaces[i + m->firstmodelsurface].numedges, 2) - 2;
 	}
 
+	// count marksurfaces used by worldmodel leafs
+	for (i = 0; i < cl.worldmodel->numleafs; i++)
+		nummark += cl.worldmodel->leafs[i + 1].nummarksurfaces;
+
 	// allocate cpu-side buffers
 	gl_bmodel_ibo_size = numtris * 3 * sizeof(idx[0]);
 	gl_bmodel_indirect_buffer_size = numtex * sizeof(cmds[0]);
+	gl_bmodel_marksurf_buffer_size = nummark * sizeof(mark[0]);
 	cmds = (bmodel_draw_indirect_t *) calloc (numtex, sizeof(cmds[0]));
 	if (!cmds)
 		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d cmds)", numtex);
 	idx = (GLuint *) calloc (numtris * 3, sizeof(idx[0]));
 	if (!idx)
 		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d indices)", numtris * 3);
-	leafs = (bmodel_gpu_leaf_t *) calloc (cl.worldmodel->numleafs, sizeof(leafs[0]));
-	if (!leafs)
-		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d leafs)", cl.worldmodel->numleafs);
+	mark = (bmodel_gpu_marksurf_t *) calloc (nummark, sizeof (mark[0]));
+	if (!mark)
+		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d marksurfs)", nummark);
 	surfs = (bmodel_gpu_surf_t *) calloc (cl.worldmodel->numsurfaces, sizeof(surfs[0]));
 	if (!surfs)
 		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d surfs)", cl.worldmodel->numsurfaces);
@@ -784,16 +800,18 @@ void GL_BuildBModelMarkBuffers (void)
 	if (!texidx)
 		Sys_Error ("GL_BuildBModelMarkBuffers: out of memory (%d tex indices)", maxnumtex);
 
-	// fill worldmodel leaf data
-	for (i = 0; i < cl.worldmodel->numleafs; i++)
+	// fill marksurface data
+	for (i = sum = 0; i < cl.worldmodel->numleafs; i++)
 	{
-		mleaf_t *src = &cl.worldmodel->leafs[i + 1];
-		bmodel_gpu_leaf_t *dst = &leafs[i];
-
-		memcpy (dst->mins, src->minmaxs, 3 * sizeof(float));
-		memcpy (dst->maxs, src->minmaxs + 3, 3 * sizeof(float));
-		dst->firstsurf = src->firstmarksurface - cl.worldmodel->marksurfaces;
-		dst->surfcountsky = (src->nummarksurfaces << 1) | (src->contents == CONTENTS_SKY);
+		mleaf_t *leaf = &cl.worldmodel->leafs[i + 1];
+		GLuint packedleafsky = (i << 1) | (leaf->contents == CONTENTS_SKY);
+		for (j = 0; j < leaf->nummarksurfaces; j++)
+		{
+			mark[sum + j].packedleafsky = packedleafsky;
+			mark[sum + j].surfindex = leaf->firstmarksurface[j];
+		}
+		qsort (mark + sum, j, sizeof (*mark), CompareMarkSurface);
+		sum += j;
 	}
 
 	for (i = 0; i < cl.worldmodel->texofs[TEXTYPE_COUNT]; i++)
@@ -809,6 +827,8 @@ void GL_BuildBModelMarkBuffers (void)
 		if (src->texinfo->texnum < 0 || src->texinfo->texnum >= cl.worldmodel->numtextures)
 			Sys_Error ("GL_BuildBModelMarkBuffers: bad texnum %d (total=%d)", src->texinfo->texnum, cl.worldmodel->numtextures);
 
+		memcpy (dst->mins, src->mins, 3 * sizeof (float));
+		memcpy (dst->maxs, src->maxs, 3 * sizeof (float));
 		dst->plane[0] = src->plane->normal[0] * flip;
 		dst->plane[1] = src->plane->normal[1] * flip;
 		dst->plane[2] = src->plane->normal[2] * flip;
@@ -882,20 +902,17 @@ void GL_BuildBModelMarkBuffers (void)
 	gl_bmodel_ibo = GL_CreateBuffer (GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, "bmodel indices",
 		sizeof (idx[0]) * numtris * 3, idx
 	);
-	gl_bmodel_leaf_buffer = GL_CreateBuffer (GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW, "bmodel leafs",
-		sizeof (leafs[0]) * cl.worldmodel->numleafs, leafs
-	);
 	gl_bmodel_surf_buffer = GL_CreateBuffer (GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW, "bmodel surfs",
 		sizeof (surfs[0]) * cl.worldmodel->numsurfaces, surfs
 	);
 	gl_bmodel_marksurf_buffer = GL_CreateBuffer (GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW, "bmodel marksurfs",
-		sizeof(cl.worldmodel->marksurfaces[0]) * cl.worldmodel->nummarksurfaces, cl.worldmodel->marksurfaces
+		sizeof(mark[0]) * nummark, mark
 	);
 
 	// free cpu-side arrays
 	free (texidx);
 	free (surfs);
-	free (leafs);
+	free (mark);
 	free (idx);
 	free (cmds);
 }

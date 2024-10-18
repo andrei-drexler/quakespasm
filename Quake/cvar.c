@@ -23,8 +23,39 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 
-static cvar_t	*cvar_vars;
-static char	cvar_null_string[] = "";
+#define MAX_CVARS	4096
+
+static int			cvar_count;
+static cvar_t		*cvar_list[MAX_CVARS];
+static cvar_t		*cvar_hashmap[MAX_CVARS * 2];
+static char			cvar_null_string[] = "";
+
+/*
+============
+Cvar_AddToHashMap
+============
+*/
+static void Cvar_AddToHashMap (cvar_t *var)
+{
+	size_t capacity = Q_COUNTOF (cvar_hashmap);
+	size_t pos = COM_HashString (var->name) % capacity, end = pos;
+
+	do
+	{
+		if (!cvar_hashmap[pos])
+		{
+			cvar_hashmap[pos] = var;
+			return;
+		}
+
+		++pos;
+		if (pos == capacity)
+			pos = 0;
+	}
+	while (pos != end);
+
+	Sys_Error ("Cvar_AddToHashMap failed");
+}
 
 //==============================================================================
 //
@@ -43,7 +74,7 @@ void Cvar_List_f (void)
 {
 	cvar_t	*cvar;
 	const char 	*partial;
-	int		len, count;
+	int		i, len, count;
 
 	if (Cmd_Argc() > 1)
 	{
@@ -57,8 +88,9 @@ void Cvar_List_f (void)
 	}
 
 	count = 0;
-	for (cvar = cvar_vars ; cvar ; cvar = cvar->next)
+	for (i = 0; i < cvar_count; i++)
 	{
+		cvar = cvar_list[i];
 		if (partial && Q_strncmp(partial, cvar->name, len))
 		{
 			continue;
@@ -125,45 +157,61 @@ void Cvar_Toggle_f (void)
 
 /*
 ============
+Cvar_HasValue
+============
+*/
+static qboolean Cvar_HasValue (const cvar_t *var, const char *value)
+{
+	float f;
+	if (sscanf (value, "%f", &f) == 1)
+		return f == var->value;
+	return !strcmp (value, var->string);
+}
+
+/*
+============
 Cvar_Cycle_f -- johnfitz
 ============
 */
 void Cvar_Cycle_f (void)
 {
 	int i;
+	cvar_t *var;
 
 	if (Cmd_Argc() < 3)
 	{
-		Con_Printf("cycle <cvar> <value list>: cycle cvar through a list of values\n");
+		Con_Printf ("%s <cvar> <value list>: cycle cvar through a list of values\n", Cmd_Argv (0));
+		return;
+	}
+
+	var = Cvar_FindVar (Cmd_Argv (1));
+	if (!var)
+	{
+		Con_Printf ("Cvar \"%s\" not found\n", Cmd_Argv (1));
 		return;
 	}
 
 	//loop through the args until you find one that matches the current cvar value.
 	//yes, this will get stuck on a list that contains the same value twice.
 	//it's not worth dealing with, and i'm not even sure it can be dealt with.
-	for (i = 2; i < Cmd_Argc(); i++)
+	if (!q_strcasecmp (Cmd_Argv (0), "cycle")) // forward
 	{
-		//zero is assumed to be a string, even though it could actually be zero.  The worst case
-		//is that the first time you call this command, it won't match on zero when it should, but after that,
-		//it will be comparing strings that all had the same source (the user) so it will work.
-		if (Q_atof(Cmd_Argv(i)) == 0)
-		{
-			if (!strcmp(Cmd_Argv(i), Cvar_VariableString(Cmd_Argv(1))))
+		for (i = 2; i < Cmd_Argc(); i++)
+			if (Cvar_HasValue (var, Cmd_Argv (i)))
 				break;
-		}
-		else
-		{
-			if (Q_atof(Cmd_Argv(i)) == Cvar_VariableValue(Cmd_Argv(1)))
+		if (++i >= Cmd_Argc ())
+			i = 2;
+	}
+	else // backward
+	{
+		for (i = Cmd_Argc() - 1; i >= 2; i--)
+			if (Cvar_HasValue (var, Cmd_Argv (i)))
 				break;
-		}
+		if (--i < 2)
+			i = Cmd_Argc () - 1;
 	}
 
-	if (i == Cmd_Argc())
-		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2)); // no match
-	else if (i + 1 == Cmd_Argc())
-		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2)); // matched last value in list
-	else
-		Cvar_Set (Cmd_Argv(1), Cmd_Argv(i+1)); // matched earlier in list
+	Cvar_SetQuick (var, Cmd_Argv (i));
 }
 
 /*
@@ -192,10 +240,10 @@ Cvar_ResetAll_f -- johnfitz
 */
 void Cvar_ResetAll_f (void)
 {
-	cvar_t	*var;
+	int i;
 
-	for (var = cvar_vars ; var ; var = var->next)
-		Cvar_Reset (var->name);
+	for (i = 0; i < cvar_count; i++)
+		Cvar_Reset (cvar_list[i]->name);
 }
 
 /*
@@ -205,10 +253,11 @@ Cvar_ResetCfg_f -- QuakeSpasm
 */
 void Cvar_ResetCfg_f (void)
 {
-	cvar_t	*var;
+	int i;
 
-	for (var = cvar_vars ; var ; var = var->next)
-		if (var->flags & CVAR_ARCHIVE) Cvar_Reset (var->name);
+	for (i = 0; i < cvar_count; i++)
+		if (cvar_list[i]->flags & CVAR_ARCHIVE)
+			Cvar_Reset (cvar_list[i]->name);
 }
 
 //==============================================================================
@@ -228,6 +277,7 @@ void Cvar_Init (void)
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
 	Cmd_AddCommand ("toggle", Cvar_Toggle_f);
 	Cmd_AddCommand ("cycle", Cvar_Cycle_f);
+	Cmd_AddCommand ("cycleback", Cvar_Cycle_f);
 	Cmd_AddCommand ("inc", Cvar_Inc_f);
 	Cmd_AddCommand ("reset", Cvar_Reset_f);
 	Cmd_AddCommand ("resetall", Cvar_ResetAll_f);
@@ -247,13 +297,28 @@ Cvar_FindVar
 */
 cvar_t *Cvar_FindVar (const char *var_name)
 {
-	cvar_t	*var;
+	size_t capacity, pos, end;
 
-	for (var = cvar_vars ; var ; var = var->next)
+	if (!cvar_count)
+		return NULL;
+
+	capacity = Q_COUNTOF (cvar_hashmap);
+	pos = COM_HashString (var_name) % capacity;
+	end = pos;
+
+	do
 	{
-		if (!Q_strcmp(var_name, var->name))
+		cvar_t *var = cvar_hashmap[pos];
+		if (!var)
+			return NULL;
+		if (0 == strcmp(var->name, var_name))
 			return var;
+
+		++pos;
+		if (pos == capacity)
+			pos = 0;
 	}
+	while (pos != end);
 
 	return NULL;
 }
@@ -261,6 +326,9 @@ cvar_t *Cvar_FindVar (const char *var_name)
 cvar_t *Cvar_FindVarAfter (const char *prev_name, unsigned int with_flags)
 {
 	cvar_t	*var;
+
+	if (!cvar_count)
+		return NULL;
 
 	if (*prev_name)
 	{
@@ -270,7 +338,7 @@ cvar_t *Cvar_FindVarAfter (const char *prev_name, unsigned int with_flags)
 		var = var->next;
 	}
 	else
-		var = cvar_vars;
+		var = cvar_list[0];
 
 	// search for the next cvar matching the needed flags
 	while (var)
@@ -303,12 +371,9 @@ void Cvar_UnlockVar (const char *var_name)
 
 void Cvar_UnlockAll (void)
 {
-	cvar_t	*var;
-
-	for (var = cvar_vars ; var ; var = var->next)
-	{
-		var->flags &= ~CVAR_LOCKED;
-	}
+	int i;
+	for (i = 0; i < cvar_count; i++)
+		cvar_list[i]->flags &= ~CVAR_LOCKED;
 }
 
 /*
@@ -512,7 +577,7 @@ void Cvar_RegisterVariable (cvar_t *variable)
 {
 	char	value[512];
 	qboolean	set_rom;
-	cvar_t	*cursor,*prev; //johnfitz -- sorted list insert
+	int			i;
 
 // first check to see if it has already been defined
 	if (Cvar_FindVar (variable->name))
@@ -528,27 +593,25 @@ void Cvar_RegisterVariable (cvar_t *variable)
 		return;
 	}
 
+	if (cvar_count == MAX_CVARS)
+		Sys_Error ("Cvar_RegisterVariable: overflow on %s", variable->name);
+
 // link the variable in
 	//johnfitz -- insert each entry in alphabetical order
-	if (cvar_vars == NULL ||
-	    strcmp(variable->name, cvar_vars->name) < 0) // insert at front
+	for (i = 0; i < cvar_count; i++)
+		if (strcmp (variable->name, cvar_list[i]->name) < 0)
+			break;
+	if (i < cvar_count)
 	{
-		variable->next = cvar_vars;
-		cvar_vars = variable;
+		variable->next = cvar_list[i];
+		memmove (cvar_list + i + 1, cvar_list + i, (cvar_count - i) * sizeof (cvar_list[0]));
 	}
-	else //insert later
-	{
-		prev = cvar_vars;
-		cursor = cvar_vars->next;
-		while (cursor && (strcmp(variable->name, cursor->name) > 0))
-		{
-			prev = cursor;
-			cursor = cursor->next;
-		}
-		variable->next = prev->next;
-		prev->next = variable;
-	}
+	if (i > 0)
+		cvar_list[i - 1]->next = variable;
+	cvar_list[i] = variable;
+	cvar_count++;
 	//johnfitz
+	Cvar_AddToHashMap (variable);
 	variable->flags |= CVAR_REGISTERED;
 
 // copy the value off, because future sets will Z_Free it
@@ -668,10 +731,11 @@ with the archive flag set to true.
 */
 void Cvar_WriteVariables (FILE *f)
 {
-	cvar_t	*var;
+	int i;
 
-	for (var = cvar_vars ; var ; var = var->next)
+	for (i = 0; i < cvar_count; i++)
 	{
+		cvar_t *var = cvar_list[i];
 		if (var->flags & CVAR_ARCHIVE)
 			fprintf (f, "%s \"%s\"\n", var->name, var->string);
 	}

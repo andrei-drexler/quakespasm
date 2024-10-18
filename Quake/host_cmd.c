@@ -1157,7 +1157,7 @@ static void Modlist_Add (const char *name)
 						// if they include Copper's mapdb.json unmodified.
 						// In all other cases we skip the dir check so that players can rename mod dirs
 						// as they please without losing their descriptions in the add-on menu.
-						if (is_base_mapdb || q_strcasecmp (mod_dir, "copper") != 0)
+						if (is_base_mapdb || q_strcasecmp (mod_dir, "copper") == 0)
 							if (q_strcasecmp (mod_dir, name) != 0)
 								continue;
 
@@ -1773,6 +1773,9 @@ adapted from fteqw, originally by Alex Shadowalker
 */
 static void Host_SetPos_f(void)
 {
+	int		i, numargs;
+	float	args[6];
+
 	if (cmd_source == src_command)
 	{
 		Cmd_ForwardToServer ();
@@ -1782,7 +1785,16 @@ static void Host_SetPos_f(void)
 	if (pr_global_struct->deathmatch)
 		return;
 
-	if (Cmd_Argc() != 7 && Cmd_Argc() != 4)
+	for (i = 1, numargs = 0; i < Cmd_Argc (); i++)
+	{
+		const char *str = Cmd_Argv (i);
+		if (strcmp (str, "(") == 0 || strcmp (str, ")") == 0)
+			continue;
+		if (++numargs <= 6)
+			args[numargs - 1] = atof (str);
+	}
+
+	if (numargs != 6 && numargs != 3)
 	{
 		SV_ClientPrintf("usage:\n");
 		SV_ClientPrintf("   setpos <x> <y> <z>\n");
@@ -1809,19 +1821,19 @@ static void Host_SetPos_f(void)
 	sv_player->v.velocity[0] = 0;
 	sv_player->v.velocity[1] = 0;
 	sv_player->v.velocity[2] = 0;
-	
-	sv_player->v.origin[0] = atof(Cmd_Argv(1));
-	sv_player->v.origin[1] = atof(Cmd_Argv(2));
-	sv_player->v.origin[2] = atof(Cmd_Argv(3));
-	
-	if (Cmd_Argc() == 7)
+
+	sv_player->v.origin[0] = args[0];
+	sv_player->v.origin[1] = args[1];
+	sv_player->v.origin[2] = args[2];
+
+	if (numargs == 6)
 	{
-		sv_player->v.angles[0] = atof(Cmd_Argv(4));
-		sv_player->v.angles[1] = atof(Cmd_Argv(5));
-		sv_player->v.angles[2] = atof(Cmd_Argv(6));
+		sv_player->v.angles[0] = args[3];
+		sv_player->v.angles[1] = args[4];
+		sv_player->v.angles[2] = args[5];
 		sv_player->v.fixangle = 1;
 	}
-	
+
 	SV_LinkEdict (sv_player, false);
 }
 
@@ -2592,7 +2604,10 @@ static void Host_Loadgame_f (void)
 	q_strlcpy (mapname, com_token, sizeof(mapname));
 	data = COM_ParseFloatNewline (data, &time);
 
-	CL_Disconnect_f ();
+// Note: calling CL_Disconnect instead of CL_Disconnect_f to avoid stopping the music
+	CL_Disconnect ();
+	if (sv.active)
+		Host_ShutdownServer (false);
 
 	PR_SwitchQCVM(&sv.qcvm);
 	SV_SpawnServer (mapname);

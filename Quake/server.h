@@ -98,6 +98,21 @@ typedef struct
 		double	shoot_time;				// last time the player attacked
 		double	cheat;					// time spent with cheats active since last autosave
 	}			autosave;
+
+	struct
+	{
+		qboolean	active;
+		int			numwarnings;
+
+		const char	*changelevel;
+		int			trigger_changelevel;
+		int			valid_changelevel;
+		int			intermission;
+		int			skill_triggers;
+		int			coop_spawns;
+		int			dm_spawns;
+		int			skill_ents[3];
+	}			mapchecks;				// additional map checks (for level designers)
 } server_t;
 
 

@@ -11,6 +11,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install Dependencies
-      run: sudo apt update && sudo apt install libcurl4-openssl-dev libmad0-dev libsdl2-dev libvorbis-dev
+      run: sudo apt update && sudo apt install libcurl4-openssl-dev libmpg123-dev libsdl2-dev libvorbis-dev
     - name: Build
       run: make --jobs=3 --keep-going --directory=Quake CC=${{ matrix.compiler }}

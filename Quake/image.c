@@ -378,10 +378,11 @@ static byte *Image_LoadLMP (FILE *f, int *width, int *height)
 //
 //==============================================================================
 
-static byte *CopyFlipped(const byte *data, int width, int height, int bpp)
+byte* Image_CopyFlipped (const void *src, int width, int height, int bpp)
 {
-	int	y, rowsize;
-	byte	*flipped;
+	int			y, rowsize;
+	const byte	*data = (const byte *)src;
+	byte		*flipped;
 
 	rowsize = width * (bpp / 8);
 	flipped = (byte *) malloc(height * rowsize);
@@ -418,7 +419,7 @@ qboolean Image_WriteJPG (const char *name, byte *data, int width, int height, in
 
 	if (!upsidedown)
 	{
-		flipped = CopyFlipped (data, width, height, bpp);
+		flipped = Image_CopyFlipped (data, width, height, bpp);
 		if (!flipped)
 			return false;
 	}
@@ -447,7 +448,7 @@ qboolean Image_WritePNG (const char *name, byte *data, int width, int height, in
 
 	q_snprintf (pathname, sizeof(pathname), "%s/%s", com_gamedir, name);
 
-	flipped = (!upsidedown)? CopyFlipped (data, width, height, bpp) : data;
+	flipped = (!upsidedown)? Image_CopyFlipped (data, width, height, bpp) : data;
 	filters = (unsigned char *) malloc (height);
 	if (!filters || !flipped)
 	{

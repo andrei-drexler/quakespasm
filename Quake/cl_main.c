@@ -134,8 +134,7 @@ void CL_Disconnect (void)
 
 // stop sounds (especially looping!)
 	S_StopAllSounds (true);
-	BGM_Stop();
-	CDAudio_Stop();
+	BGM_Pause ();
 
 // if running a local server, shut it down
 	if (cls.demoplayback)
@@ -169,6 +168,8 @@ void CL_Disconnect (void)
 void CL_Disconnect_f (void)
 {
 	CL_Disconnect ();
+	BGM_Stop ();
+	CDAudio_Stop ();
 	if (sv.active)
 		Host_ShutdownServer (false);
 }
@@ -879,33 +880,39 @@ void CL_Viewpos_f (void)
 	char buf[256];
 	if (cls.state != ca_connected)
 		return;
-#if 0
-	//camera position
+
+	// player position
 	q_snprintf (buf, sizeof (buf),
-		"(%i %i %i) %i %i %i",
-		Q_rint (r_refdef.vieworg[0]),
-		Q_rint (r_refdef.vieworg[1]),
-		Q_rint (r_refdef.vieworg[2]),
-		Q_rint (r_refdef.viewangles[PITCH]),
-		Q_rint (r_refdef.viewangles[YAW]),
-		Q_rint (r_refdef.viewangles[ROLL]));
-#else
-	//player position
-	q_snprintf (buf, sizeof (buf),
-		"(%i %i %i) %i %i %i",
-		Q_rint (cl_entities[cl.viewentity].origin[0]),
-		Q_rint (cl_entities[cl.viewentity].origin[1]),
-		Q_rint (cl_entities[cl.viewentity].origin[2]),
-		Q_rint (cl.viewangles[PITCH]),
-		Q_rint (cl.viewangles[YAW]),
-		Q_rint (cl.viewangles[ROLL])
+		"(%.0f %.0f %.0f) %.0f %.0f %.0f",
+		cl_entities[cl.viewentity].origin[0],
+		cl_entities[cl.viewentity].origin[1],
+		cl_entities[cl.viewentity].origin[2],
+		cl.viewangles[PITCH],
+		cl.viewangles[YAW],
+		cl.viewangles[ROLL]
 	);
-#endif
-	Con_Printf ("Viewpos: %s\n", buf);
+	Con_SafePrintf ("Player pos: %s\n", buf);
 
 	if (Cmd_Argc () >= 2 && !q_strcasecmp (Cmd_Argv (1), "copy"))
 		if (SDL_SetClipboardText (buf) < 0)
-			Con_Printf ("Clipboard copy failed: %s\n", SDL_GetError ());
+			Con_SafePrintf ("Clipboard copy failed: %s\n", SDL_GetError ());
+
+	// camera position
+	Con_SafePrintf ("Camera pos: (%.0f %.0f %.0f) %.0f %.0f %.0f\n",
+		r_refdef.vieworg[0],
+		r_refdef.vieworg[1],
+		r_refdef.vieworg[2],
+		r_refdef.viewangles[PITCH],
+		r_refdef.viewangles[YAW],
+		r_refdef.viewangles[ROLL]
+	);
+
+	// sun mangle
+	Con_SafePrintf ("Sun mangle: %.0f %.0f %.0f\n",
+		NormalizeAngle (r_refdef.viewangles[YAW]) + 180.f,
+		r_refdef.viewangles[PITCH],
+		r_refdef.viewangles[ROLL]
+	);
 }
 
 /*

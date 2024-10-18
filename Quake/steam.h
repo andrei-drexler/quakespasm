@@ -38,8 +38,18 @@ typedef struct steamgame_s {
 	char	library[MAX_OSPATH];
 } steamgame_t;
 
+qboolean			Steam_IsValidPath (const char *path);
 qboolean			Steam_FindGame (steamgame_t *game, int appid);
 qboolean			Steam_ResolvePath (char *path, size_t pathsize, const steamgame_t *game);
+
+qboolean			Steam_Init (const steamgame_t *game);
+qboolean			Steam_SetAchievement (const char *name);
+void				Steam_ClearStatus (void);
+void				Steam_SetStatus_Menu (void);
+void				Steam_SetStatus_SinglePlayer (const char *map);
+void				Steam_SetStatus_Multiplayer (int players, int maxplayers, const char *map);
+qboolean			Steam_SaveScreenshot (const void *rgb, int width, int height);
+void				Steam_Shutdown (void);
 
 qboolean			EGS_FindGame (char *path, size_t pathsize, const char *nspace, const char *itemid, const char *appname);
 

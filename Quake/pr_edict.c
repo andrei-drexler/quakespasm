@@ -1418,6 +1418,24 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 	return data;
 }
 
+/*
+================
+ED_IsSkillSelector
+================
+*/
+static qboolean ED_IsSkillSelector (const edict_t *ent)
+{
+	int skill;
+	const char *classname = PR_GetString (ent->v.classname);
+
+	if (strcmp (classname, "trigger_setskill") == 0 || strcmp (classname, "target_setskill") == 0)
+		return true;
+	if (strcmp (classname, "info_command") == 0 && (int)ent->v.message != 0 && sscanf (PR_GetString (ent->v.message), "skill %d", &skill) == 1)
+		return true;
+
+	return false;
+}
+
 
 /*
 ================
@@ -1459,6 +1477,51 @@ void ED_LoadFromFile (const char *data)
 			ent = ED_Alloc ();
 		data = ED_ParseEdict (data, ent);
 
+		if (!ent->v.classname)
+		{
+			Con_SafePrintf ("No classname for:\n"); //johnfitz -- was Con_Printf
+			ED_Print (ent);
+			ED_Free (ent);
+			continue;
+		}
+
+		classname = PR_GetString (ent->v.classname);
+
+		if (sv.mapchecks.active)
+		{
+			int skillflags = (int)ent->v.spawnflags & (SPAWNFLAG_NOT_EASY|SPAWNFLAG_NOT_MEDIUM|SPAWNFLAG_NOT_HARD);
+			if (!(skillflags & SPAWNFLAG_NOT_EASY))
+				sv.mapchecks.skill_ents[0]++;
+			if (!(skillflags & SPAWNFLAG_NOT_MEDIUM))
+				sv.mapchecks.skill_ents[1]++;
+			if (!(skillflags & SPAWNFLAG_NOT_HARD))
+				sv.mapchecks.skill_ents[2]++;
+
+			if (strcmp (classname, "trigger_changelevel") == 0)
+			{
+				ddef_t *mapfield = ED_FindField ("map");
+				sv.mapchecks.trigger_changelevel++;
+				if (mapfield && (mapfield->type & ~DEF_SAVEGLOBAL) == ev_string)
+				{
+					eval_t		*val = GetEdictFieldValue (ent, mapfield->ofs);
+					const char	*map = COM_SkipSpace (PR_GetString (val->string));
+					if (*map)
+					{
+						sv.mapchecks.changelevel = map;
+						sv.mapchecks.valid_changelevel++;
+					}
+				}
+			}
+			else if (ED_IsSkillSelector (ent))
+				sv.mapchecks.skill_triggers++;
+			else if (strcmp (classname, "info_intermission") == 0)
+				sv.mapchecks.intermission++;
+			else if (strcmp (classname, "info_player_coop") == 0)
+				sv.mapchecks.coop_spawns++;
+			else if (strcmp (classname, "info_player_deathmatch") == 0)
+				sv.mapchecks.dm_spawns++;
+		}
+
 		// remove things from different skill levels or deathmatch
 		if (deathmatch.value)
 		{
@@ -1478,18 +1541,7 @@ void ED_LoadFromFile (const char *data)
 			continue;
 		}
 
-//
-// immediately call spawn function
-//
-		if (!ent->v.classname)
-		{
-			Con_SafePrintf ("No classname for:\n"); //johnfitz -- was Con_Printf
-			ED_Print (ent);
-			ED_Free (ent);
-			continue;
-		}
-
-		classname = PR_GetString (ent->v.classname);
+		// remove monsters if nomonsters is set
 		if (sv.nomonsters && !Q_strncmp (classname, "monster_", 8))
 		{
 			ED_Free (ent);
@@ -1497,6 +1549,10 @@ void ED_LoadFromFile (const char *data)
 			continue;
 		}
 
+
+//
+// immediately call spawn function
+//
 	// look for the spawn function
 		func = ED_FindFunction (classname);
 

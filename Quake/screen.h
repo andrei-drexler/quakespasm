@@ -78,7 +78,8 @@ typedef struct glcanvas_s {
 	canvastype			type;
 	float				left, right, bottom, top;
 	drawtransform_t		transform;
-	GLubyte				color[4];
+	uint32_t			colorstack[8];
+	int					colorstacktop;
 	unsigned			blendmode;
 	struct gltexture_s	*texture;
 } glcanvas_t;
@@ -98,9 +99,12 @@ typedef enum menubg_t
 extern	cvar_t		scr_menuscale;
 extern	cvar_t		scr_menubgalpha;
 extern	cvar_t		scr_menubgstyle;
+extern	cvar_t		scr_centerprintbg;
 extern	cvar_t		scr_sbarscale;
 extern	cvar_t		scr_conwidth;
 extern	cvar_t		scr_conscale;
+extern	cvar_t		scr_conalpha;
+extern	cvar_t		scr_conbrightness;
 extern	cvar_t		scr_scale;
 extern	cvar_t		scr_crosshairscale;
 //johnfitz

@@ -53,6 +53,7 @@ typedef struct snd_stream_s
 	char name[MAX_QPATH];	/* name of the source file */
 	snd_info_t info;
 	stream_status_t status;
+	float volume;
 	snd_codec_t *codec;	/* codec handling this stream */
 	qboolean loop;
 	void *priv;		/* data private to the codec. */

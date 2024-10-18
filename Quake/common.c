@@ -215,6 +215,12 @@ void MultiString_Append (char **pvec, const char *str)
 	Vec_Append ((void **)pvec, 1, str, strlen (str) + 1);
 }
 
+void MultiString_AppendN (char **pvec, const char *str, size_t len)
+{
+	Vec_Append ((void **)pvec, 1, str, len);
+	VEC_PUSH (*pvec, '\0');
+}
+
 /*
 ============================================================================
 
@@ -667,7 +673,6 @@ float Q_atof (const char *str)
 	return val*sign;
 }
 
-
 /*
 ==============================================================================
 
@@ -1093,6 +1098,19 @@ const char *COM_SkipPath (const char *pathname)
 	return last;
 }
 
+
+/*
+============
+COM_SkipSpace
+============
+*/
+const char *COM_SkipSpace (const char *str)
+{
+	while (q_isspace (*str))
+		str++;
+	return str;
+}
+
 /*
 ============
 COM_StripExtension
@@ -1394,6 +1412,32 @@ Return NULL in case of overflow
 const char *COM_Parse (const char *data)
 {
 	return COM_ParseEx (data, CPE_NOTRUNC);
+}
+
+
+/*
+================
+COM_ParseLine
+================
+*/
+qboolean COM_ParseLine (const char **str, stringview_t *line)
+{
+	const char *p;
+
+	if (!str || !*str)
+		return false;
+
+	p = *str;
+	if (line)
+		line->data = p;
+	while (*p && *p != '\n')
+		p++;
+	if (line)
+		line->len = p - line->data;
+
+	*str = (*p == '\n') ? p + 1 : NULL;
+
+	return true;
 }
 
 
@@ -3018,6 +3062,10 @@ static void COM_InitBaseDir (void)
 			else if (!Sys_GetSteamQuakeUserDir (com_nightdivedir, sizeof (com_nightdivedir), steamquake.library))
 				com_nightdivedir[0] = '\0';
 		}
+		else
+		{
+			memset (&steamquake, 0, sizeof (steamquake));
+		}
 		if (steam)
 			goto storesetup;
 	}
@@ -3075,6 +3123,9 @@ storesetup:
 		else
 			flavor = remastered[0] ? QUAKE_FLAVOR_REMASTERED : QUAKE_FLAVOR_ORIGINAL;
 		q_strlcpy (path, flavor == QUAKE_FLAVOR_REMASTERED ? remastered : original, sizeof (path));
+
+		if (steamquake.appid)
+			Steam_Init (&steamquake);
 
 		if (COM_SetBaseDir (path))
 		{
@@ -3761,7 +3812,7 @@ fail:			mz_zip_reader_end(&archive);
 		}
 	}
 
-	Con_Printf("Loaded %d strings from '%s'\n", localization.numentries, file);
+	Con_SafePrintf ("[skipnotify]Loaded %d strings from '%s'\n", localization.numentries, file);
 
 	return true;
 }

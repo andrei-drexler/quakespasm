@@ -23,7 +23,7 @@ USE_CODEC_MODPLUG=0
 USE_CODEC_UMX=1
 
 # which library to use for mp3 decoding: mad or mpg123
-MP3LIB=mad
+MP3LIB=mpg123
 # which library to use for ogg decoding: vorbis or tremor
 VORBISLIB=vorbis
 
@@ -116,6 +116,7 @@ endif
 ifeq ($(MP3LIB),mpg123)
 mp3_obj=snd_mpg123
 lib_mp3dec=-lmpg123
+CFLAGS += -DMPG123_NO_LARGENAME=1
 endif
 ifeq ($(VORBISLIB),vorbis)
 cpp_vorbisdec=

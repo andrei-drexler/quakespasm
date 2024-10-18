@@ -81,33 +81,21 @@ static void GL_DeleteTexture (gltexture_t *texture);
 ================================================================================
 */
 
-typedef struct
+const glmode_t glmodes[NUM_GLMODES] =
 {
-	int	magfilter;
-	int	minfilter;
-	const char  *name;
-} glmode_t;
-static const glmode_t glmodes[] = {
-	{GL_NEAREST, GL_NEAREST,		"GL_NEAREST"},
-	{GL_NEAREST, GL_NEAREST_MIPMAP_NEAREST,	"GL_NEAREST_MIPMAP_NEAREST"},
-	{GL_NEAREST, GL_NEAREST_MIPMAP_LINEAR,	"GL_NEAREST_MIPMAP_LINEAR"},
-	{GL_LINEAR,  GL_LINEAR,			"GL_LINEAR"},
-	{GL_LINEAR,  GL_LINEAR_MIPMAP_NEAREST,	"GL_LINEAR_MIPMAP_NEAREST"},
-	{GL_LINEAR,  GL_LINEAR_MIPMAP_LINEAR,	"GL_LINEAR_MIPMAP_LINEAR"},
+	{GL_NEAREST, GL_NEAREST,					"GL_NEAREST",					"Classic"},
+	{GL_NEAREST, GL_NEAREST_MIPMAP_NEAREST,		"GL_NEAREST_MIPMAP_NEAREST",	"Classic"},
+	{GL_NEAREST, GL_NEAREST_MIPMAP_LINEAR,		"GL_NEAREST_MIPMAP_LINEAR",		"Classic"},
+	{GL_LINEAR,  GL_LINEAR,						"GL_LINEAR",					"Smooth"},
+	{GL_LINEAR,  GL_LINEAR_MIPMAP_NEAREST,		"GL_LINEAR_MIPMAP_NEAREST",		"Smooth"},
+	{GL_LINEAR,  GL_LINEAR_MIPMAP_LINEAR,		"GL_LINEAR_MIPMAP_LINEAR",		"Smooth"},
 };
-#define NUM_GLMODES (int)Q_COUNTOF(glmodes)
 static int glmode_idx = 2; /* nearest with linear mips */
 
 static GLuint gl_samplers[NUM_GLMODES * 2]; // x2: nomip + mip
 
-typedef struct texfilter_s
-{
-	int		mode;
-	float	anisotropy;
-	float	lodbias;
-} texfilter_t;
+texfilter_t gl_texfilter;
 
-static texfilter_t gl_texfilter;
 
 /*
 ===============
@@ -326,6 +314,16 @@ static void TexMgr_ForceFilterUpdate (void)
 
 /*
 ===============
+TexMgr_UsesFilterOverride
+===============
+*/
+qboolean TexMgr_UsesFilterOverride (void)
+{
+	return softemu >= SOFTEMU_COARSE || r_softemu_lightmap_banding.value > 0.f;
+}
+
+/*
+===============
 TexMgr_ApplySettings -- called at the beginning of each frame
 ===============
 */
@@ -339,7 +337,7 @@ void TexMgr_ApplySettings (void)
 	gl_texfilter.lodbias	= lodbias;
 
 	// if softemu is either 2 & 3 or r_softemu_lightmap_banding is > 0 we override the filtering mode, unless it's GL_NEAREST
-	if (gl_texfilter.mode != 0 && (softemu >= SOFTEMU_COARSE || r_softemu_lightmap_banding.value > 0.f))
+	if (gl_texfilter.mode != 0 && TexMgr_UsesFilterOverride ())
 	{
 		const float SOFTEMU_ANISOTROPY = 8.f;
 		gl_texfilter.mode = 2; // nearest with linear mips
@@ -1041,65 +1039,6 @@ static unsigned *TexMgr_MipMapH (unsigned *data, int width, int height, int dept
 	}
 
 	return data;
-}
-
-/*
-================
-TexMgr_ResampleTexture -- bilinear resample
-================
-*/
-static unsigned *TexMgr_ResampleTexture (unsigned *in, int inwidth, int inheight, qboolean alpha)
-{
-	byte *nwpx, *nepx, *swpx, *sepx, *dest;
-	unsigned xfrac, yfrac, x, y, modx, mody, imodx, imody, injump, outjump;
-	unsigned *out;
-	int i, j, outwidth, outheight;
-
-	if (inwidth == TexMgr_Pad(inwidth) && inheight == TexMgr_Pad(inheight))
-		return in;
-
-	outwidth = TexMgr_Pad(inwidth);
-	outheight = TexMgr_Pad(inheight);
-	out = (unsigned *) Hunk_AllocNoFill (outwidth*outheight*4);
-
-	xfrac = ((inwidth-1) << 16) / (outwidth-1);
-	yfrac = ((inheight-1) << 16) / (outheight-1);
-	y = outjump = 0;
-
-	for (i = 0; i < outheight; i++)
-	{
-		mody = (y>>8) & 0xFF;
-		imody = 256 - mody;
-		injump = (y>>16) * inwidth;
-		x = 0;
-
-		for (j = 0; j < outwidth; j++)
-		{
-			modx = (x>>8) & 0xFF;
-			imodx = 256 - modx;
-
-			nwpx = (byte *)(in + (x>>16) + injump);
-			nepx = nwpx + 4;
-			swpx = nwpx + inwidth*4;
-			sepx = swpx + 4;
-
-			dest = (byte *)(out + outjump + j);
-
-			dest[0] = (nwpx[0]*imodx*imody + nepx[0]*modx*imody + swpx[0]*imodx*mody + sepx[0]*modx*mody)>>16;
-			dest[1] = (nwpx[1]*imodx*imody + nepx[1]*modx*imody + swpx[1]*imodx*mody + sepx[1]*modx*mody)>>16;
-			dest[2] = (nwpx[2]*imodx*imody + nepx[2]*modx*imody + swpx[2]*imodx*mody + sepx[2]*modx*mody)>>16;
-			if (alpha)
-				dest[3] = (nwpx[3]*imodx*imody + nepx[3]*modx*imody + swpx[3]*imodx*mody + sepx[3]*modx*mody)>>16;
-			else
-				dest[3] = 255;
-
-			x += xfrac;
-		}
-		outjump += outwidth;
-		y += yfrac;
-	}
-
-	return out;
 }
 
 /*

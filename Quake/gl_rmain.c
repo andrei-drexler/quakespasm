@@ -568,6 +568,43 @@ void GL_DepthRange (zrange_t range)
 	}
 }
 
+/*
+=============
+R_GetAlphaMode
+=============
+*/
+alphamode_t R_GetAlphaMode (void)
+{
+	if (r_oit.value)
+		return ALPHAMODE_OIT;
+	return r_alphasort.value ? ALPHAMODE_SORTED : ALPHAMODE_BASIC;
+}
+
+/*
+=============
+R_GetEffectiveAlphaMode
+=============
+*/
+alphamode_t R_GetEffectiveAlphaMode (void)
+{
+	if (map_checks.value)
+		return ALPHAMODE_BASIC;
+	return R_GetAlphaMode ();
+}
+
+/*
+=============
+R_SetAlphaMode
+=============
+*/
+void R_SetAlphaMode (alphamode_t mode)
+{
+	Cvar_SetValueQuick (&r_oit, mode == ALPHAMODE_OIT);
+	if (mode != ALPHAMODE_OIT)
+		Cvar_SetValueQuick (&r_alphasort, mode == ALPHAMODE_SORTED);
+}
+
+
 //==============================================================================
 //
 // SETUP FRAME
@@ -597,7 +634,7 @@ static void R_SortEntities (void)
 	int i, j, pass;
 	int bins[1 << (MODSORT_BITS/2)];
 	int typebins[mod_numtypes*2];
-	qboolean alphasort = r_alphasort.value && !r_oit.value;
+	alphamode_t alphamode = R_GetEffectiveAlphaMode ();
 
 	if (!r_drawentities.value)
 		cl_numvisedicts = 0;
@@ -624,7 +661,7 @@ static void R_SortEntities (void)
 		entity_t *ent = cl_visedicts[i];
 		qboolean translucent = !ENTALPHA_OPAQUE (ent->alpha);
 
-		if (translucent && alphasort)
+		if (translucent && alphamode == ALPHAMODE_SORTED)
 		{
 			float dist, delta;
 			vec3_t mins, maxs;
@@ -638,7 +675,7 @@ static void R_SortEntities (void)
 			dist = sqrt (dist);
 			visedict_keys[i] = ~CLAMP (0, (int)dist, MODSORT_MASK);
 		}
-		else if (translucent && !r_oit.value)
+		else if (translucent && alphamode != ALPHAMODE_OIT)
 		{
 			// Note: -1 (0xfffff) for non-static entities (firstleaf=0),
 			// so they are sorted after static ones
@@ -845,7 +882,7 @@ GL_NeedsPostprocess
 */
 qboolean GL_NeedsPostprocess (void)
 {
-	return vid_gamma.value != 1.f || vid_contrast.value != 1.f || softemu || r_oit.value;
+	return vid_gamma.value != 1.f || vid_contrast.value != 1.f || softemu || R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
 }
 
 /*
@@ -934,6 +971,13 @@ void R_SetupView (void)
 	{
 		r_framedata.screendither = NOISESCALE * r_dither.value * r_softemu_dither_screen.value;
 		r_framedata.texturedither = NOISESCALE * r_dither.value * r_softemu_dither_texture.value;
+
+		// r_fullbright replaces the actual lightmap texture with a 2x2 50% grey one.
+		// Since texture-space dithering is applied on a scale of 1/16 of a lightmap texel,
+		// this would lead to massively overscaled dithering patterns, so we disable
+		// texture-space dithering in this case.
+		if (r_fullbright_cheatsafe)
+			r_framedata.texturedither = 0.f;
 	}
 	else if (softemu == SOFTEMU_OFF)
 	{
@@ -967,13 +1011,15 @@ void R_SetupView (void)
 	if (r_waterwarp.value)
 	{
 		int contents = Mod_PointInLeaf (r_origin, cl.worldmodel)->contents;
-		if (contents == CONTENTS_WATER || contents == CONTENTS_SLIME || contents == CONTENTS_LAVA || cl.forceunderwater)
+		qboolean forced = M_ForcedUnderwater ();
+		if (contents == CONTENTS_WATER || contents == CONTENTS_SLIME || contents == CONTENTS_LAVA || cl.forceunderwater || forced)
 		{
+			double t = forced ? realtime : cl.time;
 			if (r_waterwarp.value > 1.f)
 			{
 				//variance is a percentage of width, where width = 2 * tan(fov / 2) otherwise the effect is too dramatic at high FOV and too subtle at low FOV.  what a mess!
-				r_fovx = atan(tan(DEG2RAD(r_refdef.fov_x) / 2) * (0.97 + sin(cl.time * 1.5) * 0.03)) * 2 / M_PI_DIV_180;
-				r_fovy = atan(tan(DEG2RAD(r_refdef.fov_y) / 2) * (1.03 - sin(cl.time * 1.5) * 0.03)) * 2 / M_PI_DIV_180;
+				r_fovx = atan(tan(DEG2RAD(r_refdef.fov_x) / 2) * (0.97 + sin(t * 1.5) * 0.03)) * 2 / M_PI_DIV_180;
+				r_fovy = atan(tan(DEG2RAD(r_refdef.fov_y) / 2) * (1.03 - sin(t * 1.5) * 0.03)) * 2 / M_PI_DIV_180;
 			}
 			else
 			{
@@ -1317,31 +1363,50 @@ static void R_EmitEdictLink (const edict_t *from, const edict_t *to, showbboxfla
 ================
 R_ShowBoundingBoxesFilter
 
-r_showbboxes_filter artifact =trigger_secret
+r_showbboxes_filter artifact =trigger_secret #42
 ================
 */
 char r_showbboxes_filter_strings[MAXCMDLINE];
+qboolean r_showbboxes_filter_byindex;
 
 static qboolean R_ShowBoundingBoxesFilter (edict_t *ed)
 {
+	char entnum[16] = "";
+	const char *classname = NULL;
+	const char *filter_p = r_showbboxes_filter_strings;
+
 	if (!r_showbboxes_filter_strings[0])
 		return true;
 
+	if (r_showbboxes_filter_byindex)
+		q_snprintf (entnum, sizeof (entnum), "%d", NUM_FOR_EDICT (ed));
+
 	if (ed->v.classname)
+		classname = PR_GetString (ed->v.classname);
+
+	for (filter_p = r_showbboxes_filter_strings; *filter_p; filter_p += strlen (filter_p) + 1)
 	{
-		const char *classname = PR_GetString (ed->v.classname);
-		const char *str = r_showbboxes_filter_strings;
-		qboolean is_allowed = false;
-		while (*str && !is_allowed)
+		if (*filter_p == '#')
 		{
-			if (*str == '=')
-				is_allowed = !strcmp (classname, str + 1);
-			else
-				is_allowed = strstr (classname, str) != NULL;
-			str += strlen (str) + 1;
+			if (!strcmp (entnum, filter_p + 1))
+				return true;
+			continue;
 		}
-		return is_allowed;
+
+		if (!classname)
+			continue;
+
+		if (*filter_p == '=')
+		{
+			if (!strcmp (classname, filter_p + 1))
+				return true;
+			continue;
+		}
+
+		if (strstr (classname, filter_p) != NULL)
+			return true;
 	}
+
 	return false;
 }
 
@@ -1452,7 +1517,7 @@ static void R_ShowBoundingBoxes (void)
 		if (R_CullBox (mins, maxs))
 			continue;
 
-		// Classname filter
+		// Classname or edict num filter
 		if (!R_ShowBoundingBoxesFilter(ed))
 			continue;
 
@@ -1667,7 +1732,7 @@ static void R_BeginTranslucency (void)
 
 	GL_BeginGroup ("Translucent objects");
 
-	if (r_oit.value)
+	if (R_GetEffectiveAlphaMode () == ALPHAMODE_OIT)
 	{
 		GL_BindFramebufferFunc (GL_FRAMEBUFFER, framesetup.oit_fbo);
 		GL_ClearBufferfvFunc (GL_COLOR, 0, zeroes);
@@ -1687,7 +1752,7 @@ R_EndTranslucency
 */
 static void R_EndTranslucency (void)
 {
-	if (r_oit.value)
+	if (R_GetEffectiveAlphaMode () == ALPHAMODE_OIT)
 	{
 		GL_BeginGroup  ("OIT resolve");
 
@@ -1768,6 +1833,7 @@ void R_WarpScaleView (void)
 	qboolean msaa = framebufs.scene.samples > 1;
 	qboolean needwarpscale;
 	GLuint fbodest;
+	double t;
 
 	if (!GL_NeedsSceneEffects ())
 		return;
@@ -1813,7 +1879,8 @@ void R_WarpScaleView (void)
 	GL_UseProgram (glprogs.warpscale[water_warp]);
 	GL_SetState (GLS_BLEND_OPAQUE | GLS_NO_ZTEST | GLS_NO_ZWRITE | GLS_CULL_NONE | GLS_ATTRIBS(0));
 
-	GL_Uniform4fFunc (0, smax, tmax, water_warp ? 1.f/256.f : 0.f, cl.time);
+	t = M_ForcedUnderwater () ? realtime : cl.time;
+	GL_Uniform4fFunc (0, smax, tmax, water_warp ? 1.f/256.f : 0.f, (float)t);
 	if (v_blend[3] && gl_polyblend.value && !softemu)
 		GL_Uniform4fvFunc (1, 1, v_blend);
 	else

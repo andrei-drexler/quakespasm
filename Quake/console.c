@@ -1737,32 +1737,6 @@ static qboolean CompleteFileListSingle (const char *partial, void *param)
 	return true;
 }
 
-static qboolean CompleteClassnames (const char *partial, void *unused)
-{
-	extern edict_t *sv_player;
-	qcvm_t	*oldvm;
-	edict_t	*ed;
-	int		i;
-
-	if (!sv.active)
-		return true;
-	PR_PushQCVM (&sv.qcvm, &oldvm);
-
-	for (i = 1, ed = NEXT_EDICT (qcvm->edicts); i < qcvm->num_edicts; i++, ed = NEXT_EDICT (ed))
-	{
-		const char *name;
-		if (ed == sv_player || ed->free || !ed->v.classname)
-			continue;
-		name = PR_GetString (ed->v.classname);
-		if (*name)
-			Con_AddToTabList (name, partial, "#");
-	}
-
-	PR_PopQCVM (oldvm);
-
-	return true;
-}
-
 static qboolean CompleteBindKeys (const char *partial, void *unused)
 {
 	int i;
@@ -1820,7 +1794,6 @@ static const arg_completion_type_t arg_completion_types[] =
 	{ "load",					CompleteFileListSingle,	&savelist },
 	{ "save",					CompleteFileListSingle,	&savelist },
 	{ "sky",					CompleteFileListSingle,	&skylist },
-	{ "r_showbboxes_filter",	CompleteClassnames,		NULL },
 	{ "bind",					CompleteBindKeys,		NULL },
 	{ "unbind",					CompleteUnbindKeys,		NULL },
 };
@@ -2260,7 +2233,7 @@ void Con_DrawInput (void)
 Con_DrawSelectionHighlight
 ================
 */
-void Con_DrawSelectionHighlight (int x, int y, int line)
+static void Con_DrawSelectionHighlight (int x, int y, int line, float alpha)
 {
 	conofs_t	selbegin, selend;
 	conofs_t	begin, end;
@@ -2285,7 +2258,7 @@ void Con_DrawSelectionHighlight (int x, int y, int line)
 	if (!Con_IntersectRanges (&begin, &end, &selbegin, &selend))
 		return;
 
-	Draw_Fill (x + begin.col*8, y, (end.col-begin.col)*8, 8, 220, 1.f);
+	Draw_Fill (x + begin.col*8, y, (end.col-begin.col)*8, 8, 220, alpha);
 }
 
 /*
@@ -2296,10 +2269,12 @@ Draws the console with the solid background
 The typing input line at the bottom should only be drawn if typing is allowed
 ================
 */
-void Con_DrawConsole (int lines, qboolean drawinput)
+void Con_DrawConsole (int lines, qboolean drawbg, qboolean drawinput)
 {
 	int	i, x, y, j, sb, rows;
 	const char	*text;
+	qboolean forced;
+	float alpha;
 
 	Con_UpdateMouseState ();
 
@@ -2310,7 +2285,14 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 	GL_SetCanvas (CANVAS_CONSOLE);
 
 // draw the background
-	Draw_ConsoleBackground ();
+	if (drawbg)
+		Draw_ConsoleBackground ();
+
+// fade out during live previews for console options when there's no active game
+	forced = con_forcedup && M_WantsConsole (&alpha);
+	if (!forced)
+		alpha = 1.f;
+	GL_PushCanvasColor (1.f, 1.f, 1.f, alpha);
 
 // draw the buffer text
 	rows = (con_vislines +7)/8;
@@ -2324,7 +2306,7 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 		if (j < 0)
 			j = 0;
 		text = con_text + (j % con_totallines)*con_linewidth;
-		Con_DrawSelectionHighlight (8, y, j);
+		Con_DrawSelectionHighlight (8, y, j, alpha);
 	}
 
 	y = vid.conheight - (rows+2)*8; // +2 for input and version lines
@@ -2366,6 +2348,8 @@ void Con_DrawConsole (int lines, qboolean drawinput)
 //draw version number in bottom right
 	text = CONSOLE_TITLE_STRING;
 	M_PrintWhite (vid.conwidth - (strlen (text) << 3), vid.conheight - 8, text);
+
+	GL_PopCanvasColor ();
 }
 
 

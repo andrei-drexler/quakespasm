@@ -389,6 +389,37 @@ float GetClampedFraction (float val, float minval, float maxval)
 	return CLAMP (0.f, val, 1.f);
 }
 
+float Log2f (float val)
+{
+	return log (val) * 1.44269504;
+}
+
+float Exp2f (float val)
+{
+	return exp (val * 0.693147181);
+}
+
+float GetLogFraction (float val, float minval, float maxval)
+{
+	return GetFraction (log (val), log (minval), log (maxval));
+}
+
+float GetClampedLogFraction (float val, float minval, float maxval)
+{
+	val = GetLogFraction (val, minval, maxval);
+	return CLAMP (0.f, val, 1.f);
+}
+
+float LogLerp (float minval, float maxval, float t)
+{
+	return minval * exp (t * log (maxval / minval));
+}
+
+float EaseInOut (float t)
+{
+	return t * t * (3.f - 2.f * t);
+}
+
 /*
 ==================
 Interleave0

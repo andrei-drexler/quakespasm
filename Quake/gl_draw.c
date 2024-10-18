@@ -112,7 +112,7 @@ typedef struct
 typedef struct guivertex_t {
 	float		pos[2];
 	float		uv[2];
-	GLubyte		color[4];
+	byte		color[4];
 } guivertex_t;
 
 #define MAX_BATCH_QUADS 2048
@@ -642,10 +642,45 @@ GL_SetCanvasColor
 */
 void GL_SetCanvasColor (float r, float g, float b, float a)
 {
-	glcanvas.color[0] = (int) CLAMP(0.f, r * 255.f + 0.5f, 255.f);
-	glcanvas.color[1] = (int) CLAMP(0.f, g * 255.f + 0.5f, 255.f);
-	glcanvas.color[2] = (int) CLAMP(0.f, b * 255.f + 0.5f, 255.f);
-	glcanvas.color[3] = (int) CLAMP(0.f, a * 255.f + 0.5f, 255.f);
+	glcanvas.colorstack[glcanvas.colorstacktop] =
+		((uint32_t) CLAMP(0.f, r * 255.f + 0.5f, 255.f) <<  0) |
+		((uint32_t) CLAMP(0.f, g * 255.f + 0.5f, 255.f) <<  8) |
+		((uint32_t) CLAMP(0.f, b * 255.f + 0.5f, 255.f) << 16) |
+		((uint32_t) CLAMP(0.f, a * 255.f + 0.5f, 255.f) << 24)
+	;
+}
+
+/*
+================
+GL_PushCanvasColor
+================
+*/
+void GL_PushCanvasColor (float r, float g, float b, float a)
+{
+	if (++glcanvas.colorstacktop >= (int) Q_COUNTOF (glcanvas.colorstack))
+		Sys_Error ("GL_PushCanvasColor: overflow");
+	GL_SetCanvasColor (r, g, b, a);
+}
+
+/*
+================
+GL_PopCanvasColor
+================
+*/
+void GL_PopCanvasColor (void)
+{
+	if (--glcanvas.colorstacktop < 0)
+		Sys_Error ("GL_PopCanvasColor: underflow");
+}
+
+/*
+================
+Draw_FadedOut
+================
+*/
+static qboolean Draw_FadedOut (void)
+{
+	return (glcanvas.colorstack[glcanvas.colorstacktop] & 0xff000000u) == 0;
 }
 
 /*
@@ -667,11 +702,15 @@ Draw_SetVertex
 */
 static void Draw_SetVertex (guivertex_t *v, float x, float y, float s, float t)
 {
+	uint32_t color = glcanvas.colorstack[glcanvas.colorstacktop];
 	v->pos[0] = x * glcanvas.transform.scale[0] + glcanvas.transform.offset[0];
 	v->pos[1] = y * glcanvas.transform.scale[1] + glcanvas.transform.offset[1];
 	v->uv[0] = s;
 	v->uv[1] = t;
-	memcpy (v->color, glcanvas.color, 4 * sizeof(GLubyte));
+	v->color[0] = (color >>  0) & 0xff;
+	v->color[1] = (color >>  8) & 0xff;
+	v->color[2] = (color >> 16) & 0xff;
+	v->color[3] = (color >> 24) & 0xff;
 }
 
 /*
@@ -748,6 +787,9 @@ void Draw_StringEx (float x, float y, float dim, const char *str)
 	if (y <= glcanvas.top - dim)
 		return;			// totally off screen
 
+	if (Draw_FadedOut ())
+		return;
+
 	Draw_SetTexture (char_texture);
 
 	while (*str)
@@ -779,7 +821,7 @@ void Draw_Pic (int x, int y, qpic_t *pic)
 	glpic_t		*gl;
 	guivertex_t	*verts;
 
-	if (!pic)
+	if (!pic || Draw_FadedOut ())
 		return;
 
 	gl = (glpic_t *)pic->data;
@@ -812,9 +854,9 @@ void Draw_SubPic (float x, float y, float w, float h, qpic_t *pic, float s1, flo
 	Draw_SetTexture (gl->gltexture);
 
 	if (rgb)
-		GL_SetCanvasColor (rgb[0], rgb[1], rgb[2], alpha);
+		GL_PushCanvasColor (rgb[0], rgb[1], rgb[2], alpha);
 	else
-		GL_SetCanvasColor (1.f, 1.f, 1.f, alpha);
+		GL_PushCanvasColor (1.f, 1.f, 1.f, alpha);
 
 	verts = Draw_AllocQuad ();
 	Draw_SetVertex (verts++, x,   y,   LERP (gl->sl, gl->sh, s1), LERP (gl->tl, gl->th, t1));
@@ -822,7 +864,7 @@ void Draw_SubPic (float x, float y, float w, float h, qpic_t *pic, float s1, flo
 	Draw_SetVertex (verts++, x+w, y+h, LERP (gl->sl, gl->sh, s2), LERP (gl->tl, gl->th, t2));
 	Draw_SetVertex (verts++, x,   y+h, LERP (gl->sl, gl->sh, s1), LERP (gl->tl, gl->th, t2));
 
-	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	GL_PopCanvasColor ();
 }
 
 /*
@@ -869,9 +911,9 @@ void Draw_ConsoleBackground (void)
 
 	if (alpha > 0.0f)
 	{
-		GL_SetCanvasColor (luma, luma, luma, alpha);
+		GL_PushCanvasColor (luma, luma, luma, alpha);
 		Draw_Pic (0, 0, pic);
-		GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+		GL_PopCanvasColor ();
 	}
 }
 
@@ -892,7 +934,7 @@ void Draw_TileClear (int x, int y, int w, int h)
 
 	gl = (glpic_t *)draw_backtile->data;
 
-	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	GL_PushCanvasColor (1.f, 1.f, 1.f, 1.f);
 
 	Draw_SetTexture (gl->gltexture);
 
@@ -906,6 +948,8 @@ void Draw_TileClear (int x, int y, int w, int h)
 	Draw_SetVertex (verts++, (x+w)*scalex, y*scaley,     (x+w)*scalex*uvscale, y*scaley*uvscale + uvbias);
 	Draw_SetVertex (verts++, (x+w)*scalex, (y+h)*scaley, (x+w)*scalex*uvscale, (y+h)*scaley*uvscale + uvbias);
 	Draw_SetVertex (verts++, x*scalex,     (y+h)*scaley, x*scalex*uvscale,     (y+h)*scaley*uvscale + uvbias);
+
+	GL_PopCanvasColor ();
 }
 
 /*
@@ -919,7 +963,10 @@ void Draw_FillEx (float x, float y, float w, float h, const float *rgb, float al
 {
 	guivertex_t *verts;
 
-	GL_SetCanvasColor (rgb[0], rgb[1], rgb[2], alpha); //johnfitz -- added alpha
+	if (alpha <= 0.f)
+		return;
+
+	GL_PushCanvasColor (rgb[0], rgb[1], rgb[2], alpha); //johnfitz -- added alpha
 	Draw_SetTexture (whitetexture);
 
 	verts = Draw_AllocQuad ();
@@ -928,9 +975,16 @@ void Draw_FillEx (float x, float y, float w, float h, const float *rgb, float al
 	Draw_SetVertex (verts++, x+w, y+h, 0.f, 0.f);
 	Draw_SetVertex (verts++, x,   y+h, 0.f, 0.f);
 
-	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	GL_PopCanvasColor ();
 }
 
+/*
+=============
+Draw_Fill
+
+Fills a box of pixels with a single color
+=============
+*/
 void Draw_Fill (int x, int y, int w, int h, int c, float alpha) //johnfitz -- added alpha
 {
 	byte *pal = (byte *)d_8to24table; //johnfitz -- use d_8to24table instead of host_basepal
@@ -945,17 +999,24 @@ void Draw_Fill (int x, int y, int w, int h, int c, float alpha) //johnfitz -- ad
 
 /*
 ================
-Draw_FadeScreen -- johnfitz -- revised
+Draw_PartialFadeScreen
 ================
 */
-void Draw_FadeScreen (void)
+void Draw_PartialFadeScreen (float x0, float x1, float y0, float y1, float alpha)
 {
 	guivertex_t *verts;
 	int type;
 	float smax = 0.f, tmax = 0.f, s;
+	float u0, u1, v0, v1;
 
-	if (scr_menubgalpha.value <= 0.f)
+	alpha *= scr_menubgalpha.value;
+	if (alpha <= 0.f)
 		return;
+
+	u0 = GetFraction (x0, glcanvas.left, glcanvas.right);
+	u1 = GetFraction (x1, glcanvas.left, glcanvas.right);
+	v0 = GetFraction (y0, glcanvas.top, glcanvas.bottom);
+	v1 = GetFraction (y1, glcanvas.top, glcanvas.bottom);
 
 	if (scr_menubgstyle.value < 0.f)
 	{
@@ -974,26 +1035,25 @@ void Draw_FadeScreen (void)
 		type = CLAMP (0, type, MENUBG_NUMTYPES - 1);
 	}
 
-	GL_SetCanvas (CANVAS_DEFAULT);
 	if (type == MENUBG_DOSQUAKE)
 	{
 		float clr[3];
 		Draw_SetTexture (whitetexture);
 		/* first pass */
 		Draw_SetBlending (GLS_BLEND_MULTIPLY);
-		s = 1.f - CLAMP (0.f, scr_menubgalpha.value, 0.5f) * 2.f;
+		s = 1.f - CLAMP (0.f, alpha, 0.5f) * 2.f;
 		clr[0] = LERP (0.56f, 1.f, s);
 		clr[1] = LERP (0.43f, 1.f, s);
 		clr[2] = LERP (0.13f, 1.f, s);
-		GL_SetCanvasColor (clr[0], clr[1], clr[2], 1.f);
+		GL_PushCanvasColor (clr[0], clr[1], clr[2], 1.f);
 		verts = Draw_AllocQuad ();
-		Draw_SetVertex (verts++, glcanvas.left,  glcanvas.bottom, 0.f,  0.f);
-		Draw_SetVertex (verts++, glcanvas.right, glcanvas.bottom, smax, 0.f);
-		Draw_SetVertex (verts++, glcanvas.right, glcanvas.top,    smax, tmax);
-		Draw_SetVertex (verts++, glcanvas.left,  glcanvas.top,    0.f,  tmax);
+		Draw_SetVertex (verts++, x0, y1, u0*smax, v1*tmax);
+		Draw_SetVertex (verts++, x1, y1, u1*smax, v1*tmax);
+		Draw_SetVertex (verts++, x1, y0, u1*smax, v0*tmax);
+		Draw_SetVertex (verts++, x0, y0, u0*smax, v0*tmax);
 		/* second pass */
 		Draw_SetBlending (GLS_BLEND_ALPHA);
-		s = CLAMP (0.f, scr_menubgalpha.value, 1.f);
+		s = CLAMP (0.f, alpha, 1.f);
 		s = (sqrt (s) + s) * 0.5f;	// ~0.6 with scr_menubgalpha 0.5
 		GL_SetCanvasColor (0.095f, 0.08f, 0.045f, s);
 	}
@@ -1010,36 +1070,46 @@ void Draw_FadeScreen (void)
 		smax = glwidth / (winquakemenubg->width * s);
 		tmax = glheight / (winquakemenubg->height * s);
 		Draw_SetTexture (winquakemenubg);
-		if (scr_menubgalpha.value >= 0.5f)
+		if (alpha >= 0.5f)
 		{
 			Draw_SetBlending (GLS_BLEND_MULTIPLY);
-			s = 2.f - q_min (1.f, scr_menubgalpha.value) * 2.f;
-			GL_SetCanvasColor (s, s, s, 1.f);
+			s = 2.f - q_min (1.f, alpha) * 2.f;
+			GL_PushCanvasColor (s, s, s, 1.f);
 		}
 		else
 		{
 			Draw_SetBlending (GLS_BLEND_ALPHA);
-			s = q_max (0.f, scr_menubgalpha.value) * 2.f;
-			GL_SetCanvasColor (0.f, 0.f, 0.f, s);
+			s = q_max (0.f, alpha) * 2.f;
+			GL_PushCanvasColor (0.f, 0.f, 0.f, s);
 		}
 	}
 	else // MENUBG_GLQUAKE
 	{
 		Draw_SetTexture (whitetexture);
 		Draw_SetBlending (GLS_BLEND_ALPHA);
-		GL_SetCanvasColor (0.f, 0.f, 0.f, scr_menubgalpha.value);
+		GL_PushCanvasColor (0.f, 0.f, 0.f, alpha);
 	}
 
 	verts = Draw_AllocQuad ();
-	Draw_SetVertex (verts++, glcanvas.left,  glcanvas.bottom, 0.f,  0.f);
-	Draw_SetVertex (verts++, glcanvas.right, glcanvas.bottom, smax, 0.f);
-	Draw_SetVertex (verts++, glcanvas.right, glcanvas.top,    smax, tmax);
-	Draw_SetVertex (verts++, glcanvas.left,  glcanvas.top,    0.f,  tmax);
+	Draw_SetVertex (verts++, x0, y1, u0*smax, v1*tmax);
+	Draw_SetVertex (verts++, x1, y1, u1*smax, v1*tmax);
+	Draw_SetVertex (verts++, x1, y0, u1*smax, v0*tmax);
+	Draw_SetVertex (verts++, x0, y0, u0*smax, v0*tmax);
 
 	Draw_SetBlending (GLS_BLEND_ALPHA);
-	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);
+	GL_PopCanvasColor ();
 
 	Sbar_Changed();
+}
+
+/*
+================
+Draw_FadeScreen -- johnfitz -- revised
+================
+*/
+void Draw_FadeScreen (float alpha)
+{
+	Draw_PartialFadeScreen (glcanvas.left, glcanvas.right, glcanvas.top, glcanvas.bottom, alpha);
 }
 
 /*
@@ -1230,6 +1300,7 @@ void GL_Set2D (void)
 	glcanvas.type = CANVAS_INVALID;
 	glcanvas.texture = NULL;
 	glcanvas.blendmode = GLS_BLEND_ALPHA;
+	glcanvas.colorstacktop = 0;
 	glViewport (glx, gly, glwidth, glheight);
 	GL_SetCanvas (CANVAS_DEFAULT);
 	GL_SetCanvasColor (1.f, 1.f, 1.f, 1.f);

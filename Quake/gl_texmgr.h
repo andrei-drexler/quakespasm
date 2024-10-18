@@ -91,7 +91,8 @@ extern unsigned int d_8to24table_conchars[256];
 
 extern GLint gl_max_texture_size;
 
-typedef enum {
+typedef enum
+{
 	SOFTEMU_OFF,
 	SOFTEMU_FINE,		// screen-space dither
 	SOFTEMU_COARSE,		// world-space dither nearby, screen-space dither in the distance
@@ -101,7 +102,8 @@ typedef enum {
 } softemu_t;
 extern softemu_t softemu;
 
-typedef enum {
+typedef enum
+{
 	SOFTEMU_METRIC_NAIVE,
 	SOFTEMU_METRIC_RIEMERSMA,
 	SOFTEMU_METRIC_OKLAB,
@@ -109,6 +111,26 @@ typedef enum {
 	SOFTEMU_METRIC_COUNT,
 	SOFTEMU_METRIC_INVALID = SOFTEMU_METRIC_COUNT,
 } softemu_metric_t;
+
+// TEXTURE FILTERING
+
+typedef struct
+{
+	int	magfilter;
+	int	minfilter;
+	const char  *name;
+	const char  *uiname;
+} glmode_t;
+#define NUM_GLMODES 6
+extern const glmode_t glmodes[NUM_GLMODES];
+
+typedef struct
+{
+	int		mode;
+	float	anisotropy;
+	float	lodbias;
+} texfilter_t;
+extern texfilter_t gl_texfilter;
 
 // TEXTURE MANAGER
 
@@ -122,6 +144,7 @@ void TexMgr_NewGame (void);
 void TexMgr_Init (void);
 void TexMgr_DeleteTextureObjects (void);
 void TexMgr_ApplySettings (void);
+qboolean TexMgr_UsesFilterOverride (void);
 
 // IMAGE LOADING
 gltexture_t *TexMgr_LoadImage (qmodel_t *owner, const char *name, int width, int height, enum srcformat format,

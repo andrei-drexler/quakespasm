@@ -103,6 +103,9 @@ extern	cvar_t	r_dynamic;
 extern	cvar_t	r_novis;
 extern	cvar_t	r_scale;
 
+extern	cvar_t	r_oit;
+extern	cvar_t	r_alphasort;
+
 extern	cvar_t	gl_clear;
 extern	cvar_t	gl_polyblend;
 extern	cvar_t	gl_nocolors;
@@ -308,12 +311,26 @@ extern	qboolean	gl_anisotropy_able;
 #define OFFSET_SHOWTRIS -3
 void GL_PolygonOffset (int);
 
-typedef enum {
+typedef enum
+{
 	ZRANGE_FULL,
 	ZRANGE_VIEWMODEL,
 	ZRANGE_NEAR,
 } zrange_t;
 void GL_DepthRange (zrange_t range);
+
+typedef enum
+{
+	ALPHAMODE_BASIC,
+	ALPHAMODE_SORTED,
+	ALPHAMODE_OIT,
+
+	ALPHAMODE_COUNT
+} alphamode_t;
+
+alphamode_t R_GetAlphaMode (void);
+alphamode_t R_GetEffectiveAlphaMode (void);
+void R_SetAlphaMode (alphamode_t mode);
 
 //johnfitz -- rendering statistics
 extern int rs_brushpolys, rs_aliaspolys, rs_skypolys;
@@ -460,19 +477,20 @@ typedef struct bmodel_draw_indirect_s {
 	GLuint		baseInstance;
 } bmodel_draw_indirect_t;
 
-typedef struct bmodel_gpu_leaf_s {
-	vec3_t		mins;
-	GLuint		firstsurf;
-	vec3_t		maxs;
-	GLuint		surfcountsky; // bit 0=sky; bits 1..31=surfcount
-} bmodel_gpu_leaf_t;
+typedef struct bmodel_gpu_marksurf_s {
+	GLuint		packedleafsky; // bit 0=sky; bits 1..31=leafindex
+	GLuint		surfindex;
+} bmodel_gpu_marksurf_t;
 
 typedef struct bmodel_gpu_surf_s {
 	vec4_t		plane;
+	vec3_t		mins;
 	GLuint		framecount;
+	vec3_t		maxs;
 	GLuint		texnum;
 	GLuint		numedges;
 	GLuint		firstvert;
+	GLuint		padding[2];
 } bmodel_gpu_surf_t;
 
 void GL_BuildLightmaps (void);

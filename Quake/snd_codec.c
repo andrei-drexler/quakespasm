@@ -147,7 +147,10 @@ snd_stream_t *S_CodecOpenStreamType (const char *filename, unsigned int type, qb
 	stream = S_CodecUtilOpen(filename, codec, loop);
 	if (stream) {
 		if (codec->codec_open(stream))
+		{
 			stream->status = STREAM_PLAY;
+			stream->volume = 1.f;
+		}
 		else	S_CodecUtilClose(&stream);
 	}
 	return stream;
@@ -181,7 +184,10 @@ snd_stream_t *S_CodecOpenStreamExt (const char *filename, qboolean loop)
 	stream = S_CodecUtilOpen(filename, codec, loop);
 	if (stream) {
 		if (codec->codec_open(stream))
+		{
 			stream->status = STREAM_PLAY;
+			stream->volume = 1.f;
+		}
 		else	S_CodecUtilClose(&stream);
 	}
 	return stream;
@@ -206,6 +212,7 @@ snd_stream_t *S_CodecOpenStreamAny (const char *filename, qboolean loop)
 			if (stream) {
 				if (codec->codec_open(stream)) {
 					stream->status = STREAM_PLAY;
+					stream->volume = 1.f;
 					return stream;
 				}
 				S_CodecUtilClose(&stream);
@@ -232,7 +239,10 @@ snd_stream_t *S_CodecOpenStreamAny (const char *filename, qboolean loop)
 		stream = S_CodecUtilOpen(filename, codec, loop);
 		if (stream) {
 			if (codec->codec_open(stream))
+			{
 				stream->status = STREAM_PLAY;
+				stream->volume = 1.f;
+			}
 			else	S_CodecUtilClose(&stream);
 		}
 		return stream;
