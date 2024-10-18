@@ -314,11 +314,11 @@ IW_APP_DIR=$(shell finddir B_APPS_DIRECTORY)/qsprawl/
 install:	qsprawl
 	mkdir -p $(IW_APP_DIR)
 	cp qsprawl $(IW_APP_DIR)
-	cp ironwail.pak $(IW_APP_DIR)
+	cp qsprawl.pak $(IW_APP_DIR)
 else
 install:	qsprawl
 	cp qsprawl /usr/local/games/quake
-	cp ironwail.pak /usr/local/games/quake
+	cp qsprawl.pak /usr/local/games/quake
 endif
 
 #---------------------------------------------------------------
