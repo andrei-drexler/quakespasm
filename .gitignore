@@ -1,11 +1,11 @@
 Windows/VisualStudio/.vs/
 Windows/VisualStudio/Build-*/
-Windows/VisualStudio/ironwail.vcxproj.user
+Windows/VisualStudio/qsprawl.vcxproj.user
 Quake/*.o
 Quake/*.d
 Quake/*.res
 Quake/*.exe
-Quake/ironwail
+Quake/qsprawl
 build/
 /.vs
 /out/

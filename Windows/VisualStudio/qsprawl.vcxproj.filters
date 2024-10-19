@@ -486,7 +486,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="ironwail.natvis" />
+    <Natvis Include="qsprawl.natvis" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\..\Quake\qsprawl.pak">

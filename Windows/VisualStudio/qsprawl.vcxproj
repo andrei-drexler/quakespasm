@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{AE77266F-0A23-4F08-A491-369DE664B273}</ProjectGuid>
-    <RootNamespace>ironwail</RootNamespace>
+    <RootNamespace>qsprawl</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -424,7 +424,7 @@ copy "$(SolutionDir)..\zlib\$(PlatformShortName)\*.dll" "$(TargetDir)"</Command>
     <ResourceCompile Include="..\QuakeSpasm.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="ironwail.natvis" />
+    <Natvis Include="qsprawl.natvis" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\..\Quake\qsprawl.pak">
