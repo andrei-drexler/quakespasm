@@ -32,11 +32,11 @@ BEGIN
 	BEGIN
 		BLOCK "040904E4"
 		BEGIN
-			VALUE "FileDescription",	"Ironwail Quake engine"
+			VALUE "FileDescription",	"SPRAWL 96 Quake engine"
 			VALUE "FileVersion",		VER_FILEVERSION_STR
 			VALUE "LegalCopyright",		"\xA9 2022"
-			VALUE "OriginalFilename",	"ironwail.exe"
-			VALUE "ProductName",		"Ironwail"
+			VALUE "OriginalFilename",	"QSprawl.exe"
+			VALUE "ProductName",		"QSprawl"
 			VALUE "ProductVersion",		VER_PRODUCTVERSION_STR
 		END
 	END

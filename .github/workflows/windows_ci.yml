@@ -17,7 +17,7 @@ jobs:
         $ver_suffix = ("$gitbranch" -eq "master" -Or "$gitbranch" -eq "main") ? "-$gitrev" : "-$gitbranch-$gitrev"
         $platform_alt = ("${{matrix.platform}}" -eq "x64") ? "win64" : "win32"
         $platform_short = ("${{matrix.platform}}" -eq "Win32") ? "x86" : "${{matrix.platform}}"
-        $build_artifact = "ironwail${ver_suffix}-${platform_alt}"
+        $build_artifact = "qsprawl${ver_suffix}-${platform_alt}"
         echo "VER_SUFFIX=$ver_suffix" >> ${env:GITHUB_ENV}
         echo "BUILD_ARTIFACT=$build_artifact" >> ${env:GITHUB_ENV}
         echo "BUILD_DIR=$build_artifact" >> ${env:GITHUB_ENV}
@@ -44,7 +44,7 @@ jobs:
             mkdir $zipdir | out-null
             copy ${compiledir}\*.exe $zipdir
             copy ${compiledir}\*.dll $zipdir
-            copy Quake\ironwail.pak $zipdir
+            copy Quake\qsprawl.pak $zipdir
             copy Quakespasm.html $zipdir
             copy Quakespasm.txt $zipdir
             copy Quakespasm-Music.txt $zipdir
