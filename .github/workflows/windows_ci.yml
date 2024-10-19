@@ -36,6 +36,7 @@ jobs:
         )
         & $msbuild Windows\VisualStudio\ironwail.sln $options
         if (-not $?) { throw "Build failed" }
+        ls -la Windows\VisualStudio\${env:BUILD_DIR}
     - name: Prepare archive
       if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
       run: |
