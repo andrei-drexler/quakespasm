@@ -752,6 +752,9 @@ SCR_DrawSpeed
 */
 void SCR_DrawSpeed (void)
 {
+    if (cl.intermission || CL_InCutscene () || scr_viewsize.value >= 130)
+		return;
+
 	const float show_speed_interval_value = 0.05f;
 	static float maxspeed = 0, display_speed = -1;
 	static double lastrealtime = 0;
