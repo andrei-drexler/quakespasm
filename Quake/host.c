@@ -1078,9 +1078,9 @@ static void UpdateWindowTitle (void)
 		VID_SetWindowTitle (title);
 
 		if (current.stats.max_players > 1)
-			Steam_SetStatus_Multiplayer (current.stats.players, current.stats.max_players, utf8name);
+			Steam_SetStatus_Multiplayer (current.stats.players, current.stats.max_players, utf8name[0] ? utf8name : current.map);
 		else
-			Steam_SetStatus_SinglePlayer (utf8name);
+			Steam_SetStatus_SinglePlayer (utf8name[0] ? utf8name : current.map);
 	}
 	else
 	{
